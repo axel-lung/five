@@ -24,15 +24,18 @@ services:
     image: minio/minio:latest
     container_name: five_minio
     restart: unless-stopped
-    command: server /data --address ":6010" --console-address ":6011"
+    # Ports par defaut de MinIO (9000 API / 9001 console). Les ports internes
+    # sont isoles par conteneur : les renumeroter n'apporte rien et casse
+    # `mc ready local`, qui interroge l'endpoint par defaut.
+    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin_${MINIO_PASSWORD:-changeme}
     expose:
-      - "6010"
-      - "6011"
+      - "9000"
+      - "9001"
     ports:
-      - "127.0.0.1:6011:6011"   # console, accessible en local uniquement (ssh -L pour y accéder)
+      - "127.0.0.1:6011:9001"   # console : cote hote on garde 6011 (ssh -L pour y acceder)
     volumes:
       - minio_data:/data
     networks:
@@ -42,6 +45,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   # Backend API (Node.js/TypeScript)
   backend:
@@ -52,7 +56,7 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://five_user:five_password_${DB_PASSWORD:-changeme}@db:5432/five
-      - MINIO_ENDPOINT=minio:6010
+      - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin_${MINIO_PASSWORD:-changeme}
       - MINIO_USE_SSL=false
