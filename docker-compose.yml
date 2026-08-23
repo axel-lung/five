@@ -103,7 +103,7 @@ services:
       - traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.five-frontend.rule=Host(`five.alng.fr`) && PathPrefix(`/`) || PathPrefixSlice(`/`, 1)"
+      - "traefik.http.routers.five-frontend.rule=Host(`five.alng.fr`) && PathPrefix(`/`)"
       - "traefik.http.routers.five-frontend.entrypoints=websecure"
       - "traefik.http.routers.five-frontend.tls=true"
       - "traefik.http.routers.five-frontend.tls.certresolver=myresolver"
