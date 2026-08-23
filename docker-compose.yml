@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-
   # PostgreSQL Database
   db:
     image: postgres:15-alpine
@@ -27,19 +26,25 @@ services:
     image: minio/minio:latest
     container_name: five_minio
     restart: unless-stopped
-    command: server /data --console-address ":9011"
+    command: server /data --console-address ":6011"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin_${MINIO_PASSWORD:-changeme}
+    expose:
+      - "6010"
+      - "6011"
     volumes:
       - minio_data:/data
     networks:
       - traefik
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9010/minio/health/ready"]
+      test: ["CMD", "curl", "-f", "http://localhost:6010/minio/health/ready"]
       interval: 10s
       timeout: 5s
       retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.five-minio.loadbalancer.server.port=6010"
 
   # Backend API (Node.js/TypeScript)
   backend:
@@ -52,13 +57,15 @@ services:
       - .env.example
     environment:
       - DATABASE_URL=postgresql://five_user:${DB_PASSWORD:-changeme}@db:5432/five
-      - MINIO_ENDPOINT=minio:9010
+      - MINIO_ENDPOINT=minio:6010
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=${MINIO_PASSWORD:-changeme}
       - MINIO_USE_SSL=false
       - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_change_this_in_production}
       - NODE_ENV=development
-      - PORT=3010
+      - PORT=6010
+    expose:
+      - "6010"
     volumes:
       - ./backend/src:/usr/src/app/src
       - ./backend/package.json:/usr/src/app/package.json
@@ -73,13 +80,15 @@ services:
       - "traefik.http.middlewares.api-prefix.stripprefix.prefixes=/api"
       - "traefik.http.routers.five-api.tls=true"
       - "traefik.http.routers.five-api.tls.certresolver=myresolver"
+      - "traefik.http.routers.five-api.priority=20"
+      - "traefik.http.services.five-backend.loadbalancer.server.port=6010"
     depends_on:
       db:
         condition: service_healthy
       minio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spare", "http://localhost:3010/health || exit 1"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spare", "http://localhost:6010/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -96,6 +105,8 @@ services:
     environment:
       - REACT_APP_API_URL=https://five.alng.fr/api
       - NODE_ENV=production
+    expose:
+      - "80"
     volumes:
       - ./frontend/src:/usr/src/app/src
       - ./frontend/package.json:/usr/src/app/package.json
@@ -107,6 +118,7 @@ services:
       - "traefik.http.routers.five-frontend.entrypoints=websecure"
       - "traefik.http.routers.five-frontend.tls=true"
       - "traefik.http.routers.five-frontend.tls.certresolver=myresolver"
+      - "traefik.http.routers.five-frontend.priority=0"
     depends_on:
       - backend
 
