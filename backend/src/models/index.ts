@@ -1,15 +1,33 @@
 import { Sequelize, DataTypes, Model } from 'sequelize';
+import dotenv from 'dotenv';
 import { User } from './user';
 import { Group } from './group';
 import { Event } from './event';
 import { EventInscription } from './eventInscription';
 import { GroupMember } from './groupMember';
 
+// Les imports ES sont hisses : ce module s'execute avant le dotenv.config()
+// de server.ts. On recharge donc .env ici (l'appel est idempotent), sinon
+// DATABASE_URL serait absent en developpement local.
+dotenv.config();
+
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  throw new Error(
+    'DATABASE_URL est requis. Voir .env.example ; en Docker il est fourni par docker-compose.yml.'
+  );
+}
+
 // Initialize Sequelize connection
-export const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: ':memory:',
+export const sequelize = new Sequelize(databaseUrl, {
+  dialect: 'postgres',
   logging: false,
+  define: {
+    // Les attributs sont en camelCase cote TypeScript, les colonnes en
+    // snake_case cote Postgres (convention SQL, evite les identifiants quotes).
+    underscored: true,
+  },
 });
 
 // Initialize models

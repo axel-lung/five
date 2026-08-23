@@ -7,6 +7,7 @@
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
+    "migrate": "node dist/db/migrator.js",
     "test": "jest"
   },
   "keywords": [
@@ -29,7 +30,7 @@
     "multer": "^1.4.5-lts.1",
     "pg": "^8.11.0",
     "sequelize": "^6.32.1",
-    "sqlite3": "^6.0.1",
+    "umzug": "^3.8.3",
     "uuid": "^9.0.0"
   },
   "devDependencies": {

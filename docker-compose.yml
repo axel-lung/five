@@ -10,7 +10,8 @@ services:
       POSTGRES_PASSWORD: five_password_${DB_PASSWORD:-changeme}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts/db.init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Pas de script d'init : le schema appartient aux migrations Sequelize
+      # (backend/src/migrations), jouees au demarrage du backend.
     networks:
       - traefik
     healthcheck:

@@ -3,7 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
-import { sequelize } from './models/index'; // We'll create this file later
+import { sequelize } from './models/index';
+import { migrator } from './db/migrator';
 import userRoutes from './routes/userRoutes';
 import groupRoutes from './routes/groupRoutes';
 import eventRoutes from './routes/eventRoutes';
@@ -51,10 +52,15 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('Database connection has been established successfully.');
 
-    // Sync all models (in development, you might want to use { force: true } to reset the database)
-    // In production, you should use migrations instead of sync
-    await sequelize.sync(); // { force: true } for development
-    console.log('All models were synchronized successfully.');
+    // Le schema est pilote par les migrations (src/migrations), jamais par
+    // sequelize.sync() : sync() ne sait pas faire evoluer une base contenant
+    // deja des inscriptions reelles.
+    const executed = await migrator.up();
+    console.log(
+      executed.length > 0
+        ? `Applied ${executed.length} migration(s): ${executed.map((m) => m.name).join(', ')}`
+        : 'Database schema is up to date.'
+    );
 
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);

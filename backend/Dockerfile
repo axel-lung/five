@@ -4,9 +4,6 @@ FROM node:18-alpine AS builder
 
 WORKDIR /usr/src/app
 
-# sqlite3 est un module natif : il doit etre compile pour musl (Alpine)
-RUN apk add --no-cache python3 make g++
-
 # Install app dependencies (including dev dependencies for build)
 COPY package*.json ./
 RUN npm ci
@@ -22,8 +19,7 @@ FROM node:18-alpine AS deps
 
 WORKDIR /usr/src/app
 
-RUN apk add --no-cache python3 make g++
-
+# Aucune dependance native depuis le retrait de sqlite3 : pas de toolchain.
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
