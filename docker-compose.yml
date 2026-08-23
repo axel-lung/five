@@ -4,8 +4,6 @@ services:
 
   # PostgreSQL Database
   db:
-    networks:
-      - traefik
     image: postgres:15-alpine
     container_name: five_db
     restart: unless-stopped
