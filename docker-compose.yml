@@ -108,10 +108,16 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/health || exit 1"]
+      # 127.0.0.1 et non localhost : nginx est en `listen 80` (IPv4 seul), or
+      # localhost peut resoudre vers ::1 dans le conteneur.
+      # Le test -f verifie en plus que le build Vite est bien present : un
+      # healthcheck qui ne testerait que /health passerait avec un dossier vide.
+      # Attention : Traefik retire du routage un conteneur unhealthy.
+      test: ["CMD-SHELL", "test -f /usr/share/nginx/html/index.html && wget -q --spider http://127.0.0.1/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
 networks:
   # Reseau du Traefik deja en place sur le serveur (cree hors de ce projet).
