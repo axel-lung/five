@@ -58,6 +58,7 @@ services:
       - MINIO_USE_SSL=false
       - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_change_this_in_production}
       - NODE_ENV=development
+      - PORT=3000
     volumes:
       - ./backend/src:/usr/src/app/src
       - ./backend/package.json:/usr/src/app/package.json
