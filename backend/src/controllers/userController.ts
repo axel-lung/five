@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { UserModel as User } from '../models';
-import { validateRequest } from '../utils/validationSchemas';
 import { updateProfileSchema } from '../utils/validationSchemas';
 
 // Get user profile

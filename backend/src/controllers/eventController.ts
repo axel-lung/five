@@ -1,8 +1,28 @@
 import { Request, Response, NextFunction } from 'express';
-import { EventModel as Event, UserModel as User, GroupModel as Group, EventInscriptionModel as EventInscription } from '../models';
-import { Op } from 'sequelize';
-import { validateRequest } from '../utils/validationSchemas';
+import { EventModel as Event, UserModel as User, GroupModel as Group, EventInscriptionModel as EventInscription, sequelize } from '../models';
+import { Op, Transaction } from 'sequelize';
 import { createEventSchema } from '../utils/validationSchemas';
+
+/**
+ * Recalcule 'open' <-> 'full' a partir du nombre de places confirmees.
+ * Les statuts pilotes par l'organisateur (draft, completed, cancelled) ne sont
+ * jamais ecrases : seule la bascule liee a la capacite est automatique.
+ */
+const syncCapacityStatus = async (event: any, t: Transaction): Promise<void> => {
+  if (event.status !== 'open' && event.status !== 'full') {
+    return;
+  }
+
+  const confirmedCount = await EventInscription.count({
+    where: { eventId: event.id, status: 'confirmed' },
+    transaction: t,
+  });
+
+  const nextStatus = confirmedCount >= event.capacity ? 'full' : 'open';
+  if (nextStatus !== event.status) {
+    await event.update({ status: nextStatus }, { transaction: t });
+  }
+};
 
 // Create a new event
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
@@ -62,7 +82,10 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
     const { date, city, level } = req.query;
 
     // Build where clause
-    const whereClause: any = { status: 'open' }; // Only show open events by default
+    // 'full' doit rester visible : un evenement complet interesse toujours,
+    // ne serait-ce que pour rejoindre la liste d'attente. Seuls draft,
+    // completed et cancelled sont masques.
+    const whereClause: any = { status: { [Op.in]: ['open', 'full'] } };
 
     if (date) {
       const startDate = new Date(date as string);
@@ -194,75 +217,225 @@ export const deleteEvent = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-// Join an event (create inscription)
+/**
+ * E-03 : rejoindre un evenement.
+ *
+ * Toute l'operation tient dans une transaction avec verrou exclusif sur la
+ * ligne evenement (SELECT ... FOR UPDATE) : sans ce verrou, deux inscriptions
+ * simultanees lisent le meme compteur et confirment toutes deux la derniere
+ * place. La contrainte unique (event_id, user_id) reste le filet de securite.
+ */
 export const joinEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
     const userId = (req as any).user.id;
 
-    // Find event
-    const event = await Event.findByPk(eventId);
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
+    const result = await sequelize.transaction(async (t) => {
+      const event = await Event.findByPk(eventId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
 
-    // Check if event is still open for registration
-    if (event.status !== 'open') {
-      return res.status(400).json({ message: 'Event is not open for registration' });
-    }
-
-    // Check if user already registered
-    const existingInscription = await EventInscription.findOne({
-      where: { eventId, userId }
-    });
-
-    if (existingInscription) {
-      return res.status(400).json({ message: 'You are already registered for this event' });
-    }
-
-    // Count confirmed participants
-    const confirmedCount = await EventInscription.count({
-      where: {
-        eventId,
-        status: 'confirmed'
+      if (!event) {
+        return { error: { code: 404, message: 'Event not found' } };
       }
+
+      if (event.status !== 'open' && event.status !== 'full') {
+        return { error: { code: 400, message: 'Event is not open for registration' } };
+      }
+
+      const existing = await EventInscription.findOne({
+        where: { eventId, userId },
+        transaction: t,
+      });
+
+      // Une inscription annulee peut etre reprise : on la reactive plutot que
+      // d'en creer une seconde, que la contrainte unique refuserait.
+      if (existing && existing.status !== 'cancelled') {
+        return { error: { code: 400, message: 'You are already registered for this event' } };
+      }
+
+      const confirmedCount = await EventInscription.count({
+        where: { eventId, status: 'confirmed' },
+        transaction: t,
+      });
+
+      const status = confirmedCount < event.capacity ? 'confirmed' : 'waitlist';
+
+      const inscription = existing
+        ? await existing.update({ status }, { transaction: t })
+        : await EventInscription.create({ eventId, userId, status }, { transaction: t });
+
+      await syncCapacityStatus(event, t);
+
+      return { inscription };
     });
 
-    // Determine status: confirmed if there's space, otherwise waitlist
-    const status = confirmedCount < event.capacity ? 'confirmed' : 'waitlist';
+    if (result.error) {
+      return res.status(result.error.code).json({ message: result.error.message });
+    }
 
-    // Create inscription
-    const inscription = await EventInscription.create({
-      eventId,
-      userId,
-      status,
-    });
-
-    res.status(201).json(inscription);
+    res.status(201).json(result.inscription);
   } catch (error) {
     next(error);
   }
 };
 
-// Leave an event (cancel inscription)
+/**
+ * E-03 : se desister.
+ *
+ * Liberer une place confirmee promeut automatiquement le premier inscrit en
+ * liste d'attente, dans l'ordre d'inscription. Sans cela la liste d'attente ne
+ * se vide jamais et les places liberees restent perdues.
+ */
 export const leaveEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
     const userId = (req as any).user.id;
 
-    // Find inscription
-    const inscription = await EventInscription.findOne({
-      where: { eventId, userId }
+    const result = await sequelize.transaction(async (t) => {
+      const event = await Event.findByPk(eventId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+
+      if (!event) {
+        return { error: { code: 404, message: 'Event not found' } };
+      }
+
+      const inscription = await EventInscription.findOne({
+        where: { eventId, userId },
+        transaction: t,
+      });
+
+      if (!inscription || inscription.status === 'cancelled') {
+        return { error: { code: 404, message: 'You are not registered for this event' } };
+      }
+
+      const wasConfirmed = inscription.status === 'confirmed';
+      await inscription.update({ status: 'cancelled' }, { transaction: t });
+
+      let promoted = null;
+      if (wasConfirmed) {
+        promoted = await EventInscription.findOne({
+          where: { eventId, status: 'waitlist' },
+          order: [['registeredAt', 'ASC']],
+          transaction: t,
+        });
+
+        if (promoted) {
+          await promoted.update({ status: 'confirmed' }, { transaction: t });
+        }
+      }
+
+      await syncCapacityStatus(event, t);
+
+      return { promotedUserId: promoted ? promoted.userId : null };
     });
 
-    if (!inscription) {
-      return res.status(404).json({ message: 'You are not registered for this event' });
+    if (result.error) {
+      return res.status(result.error.code).json({ message: result.error.message });
     }
 
-    // Update status to cancelled
-    await inscription.update({ status: 'cancelled' });
+    res.json({
+      message: 'You have left the event',
+      promotedUserId: result.promotedUserId,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    res.json({ message: 'You have left the event' });
+/**
+ * E-02 : transitions de statut reservees a l'organisateur.
+ * 'full' est exclu du schema de validation : il est derive de la capacite.
+ */
+export const updateEventStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const eventId = req.params.id;
+    const userId = (req as any).user.id;
+    const { status } = req.body;
+
+    const result = await sequelize.transaction(async (t) => {
+      const event = await Event.findByPk(eventId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+
+      if (!event) {
+        return { error: { code: 404, message: 'Event not found' } };
+      }
+
+      if (event.organizerId !== userId) {
+        return { error: { code: 403, message: 'Not authorized to update this event' } };
+      }
+
+      if (event.status === 'cancelled') {
+        return { error: { code: 400, message: 'A cancelled event cannot change status' } };
+      }
+
+      await event.update({ status }, { transaction: t });
+
+      // Passer en 'open' peut immediatement rebasculer en 'full' si la
+      // capacite est deja atteinte.
+      if (status === 'open') {
+        await syncCapacityStatus(event, t);
+      }
+
+      return { event };
+    });
+
+    if (result.error) {
+      return res.status(result.error.code).json({ message: result.error.message });
+    }
+
+    res.json(result.event);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * E-07 : resume public d'un evenement via son lien partageable.
+ *
+ * Route non authentifiee : la reponse ne doit exposer aucune donnee
+ * personnelle des participants, seulement de quoi decider de s'inscrire.
+ */
+export const getSharedEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const event = await Event.findOne({
+      where: { shareableLinkToken: req.params.token },
+      include: [
+        { model: User, as: 'organizer', attributes: ['firstName'] },
+        { model: Group, as: 'group', attributes: ['name', 'city'] },
+      ],
+    });
+
+    // Un evenement en brouillon n'est pas encore partage : on renvoie 404
+    // plutot que 403, pour ne pas confirmer l'existence du token.
+    if (!event || event.status === 'draft') {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const confirmedCount = await EventInscription.count({
+      where: { eventId: event.id, status: 'confirmed' },
+    });
+
+    res.json({
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      dateTime: event.dateTime,
+      location: event.location,
+      capacity: event.capacity,
+      level: event.level,
+      price: event.price,
+      status: event.status,
+      confirmedCount,
+      spotsLeft: Math.max(0, event.capacity - confirmedCount),
+      organizer: (event as any).organizer,
+      group: (event as any).group,
+    });
   } catch (error) {
     next(error);
   }

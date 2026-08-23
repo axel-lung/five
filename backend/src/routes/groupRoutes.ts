@@ -10,7 +10,7 @@ import {
   getGroupMembers
 } from '../controllers/groupController';
 import { authenticateToken } from '../middleware/auth';
-import { validateRequest } from '../utils/validationSchemas';
+import { validateRequest } from '../middleware/validateRequest';
 import { createGroupSchema } from '../utils/validationSchemas';
 
 const router = Router();

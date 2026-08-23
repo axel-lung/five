@@ -54,21 +54,13 @@ export class EventInscription extends Model<EventInscriptionAttributes, EventIns
           allowNull: false,
           defaultValue: 'pending',
         },
-        registeredAt: {
-          type: DataTypes.DATE,
-          allowNull: true,
-          defaultValue: DataTypes.NOW,
-        },
-        updatedAt: {
-          type: DataTypes.DATE,
-          allowNull: true,
-          defaultValue: DataTypes.NOW,
-        },
       },
       {
         sequelize,
         tableName: 'event_inscriptions',
-        timestamps: false,
+        timestamps: true,
+        createdAt: 'registeredAt',
+        updatedAt: 'updatedAt',
       }
     );
   }

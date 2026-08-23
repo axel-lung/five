@@ -103,21 +103,11 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
           allowNull: false,
           defaultValue: false,
         },
-        createdAt: {
-          type: DataTypes.DATE,
-          allowNull: false,
-          defaultValue: DataTypes.NOW,
-        },
-        updatedAt: {
-          type: DataTypes.DATE,
-          allowNull: false,
-          defaultValue: DataTypes.NOW,
-        },
       },
       {
         sequelize,
         tableName: 'users',
-        timestamps: false,
+        timestamps: true,
       }
     );
   }

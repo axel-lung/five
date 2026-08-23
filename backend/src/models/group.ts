@@ -68,21 +68,11 @@ export class Group extends Model<GroupAttributes, GroupCreationAttributes>
             key: 'id',
           },
         },
-        createdAt: {
-          type: DataTypes.DATE,
-          allowNull: false,
-          defaultValue: DataTypes.NOW,
-        },
-        updatedAt: {
-          type: DataTypes.DATE,
-          allowNull: false,
-          defaultValue: DataTypes.NOW,
-        },
       },
       {
         sequelize,
         tableName: 'groups',
-        timestamps: false,
+        timestamps: true,
       }
     );
   }

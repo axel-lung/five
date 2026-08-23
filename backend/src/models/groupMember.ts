@@ -52,16 +52,13 @@ export class GroupMember extends Model<GroupMemberAttributes, GroupMemberCreatio
           allowNull: false,
           defaultValue: 'member',
         },
-        joinedAt: {
-          type: DataTypes.DATE,
-          allowNull: true,
-          defaultValue: DataTypes.NOW,
-        },
       },
       {
         sequelize,
         tableName: 'group_members',
-        timestamps: false,
+        timestamps: true,
+        createdAt: 'joinedAt',
+        updatedAt: false,
       }
     );
   }

@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { GroupModel as Group, UserModel as User, GroupMemberModel as GroupMember } from '../models';
-import { validateRequest } from '../utils/validationSchemas';
 import { createGroupSchema } from '../utils/validationSchemas';
 
 // Create a new group

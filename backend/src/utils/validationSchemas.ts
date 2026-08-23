@@ -48,16 +48,12 @@ export const createEventSchema = Joi.object({
   groupId: Joi.string().uuid().optional(),
 });
 
-// Helper function for Joi validation middleware
-export const validateRequest = (schema: any) => {
-  return (req: any, res: any, next: any) => {
-    const { error } = schema.validate(req.body);
-    if (error) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: error.details.map((detail: any) => detail.message)
-      });
-    }
-    next();
-  };
-};
+// E-02 : transitions de statut pilotees par l'organisateur.
+// 'full' est calcule par le serveur a partir de la capacite, jamais impose.
+export const updateEventStatusSchema = Joi.object({
+  status: Joi.string().valid('draft', 'open', 'completed', 'cancelled').required(),
+});
+
+// Le middleware de validation vit dans middleware/validateRequest.ts.
+// Il en existait une seconde copie ici, chaque fichier important l'une ou
+// l'autre au hasard.

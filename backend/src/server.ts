@@ -2,7 +2,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
+import { env } from './config/env';
 import { sequelize } from './models/index';
 import { migrator } from './db/migrator';
 import userRoutes from './routes/userRoutes';
@@ -10,11 +10,8 @@ import groupRoutes from './routes/groupRoutes';
 import eventRoutes from './routes/eventRoutes';
 import authRoutes from './routes/authRoutes';
 
-// Load environment variables
-dotenv.config();
-
 const app: Express = express();
-const PORT = process.env.PORT || 3001;
+const PORT = env.port;
 
 // Middleware
 app.use(helmet());

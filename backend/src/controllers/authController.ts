@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { UserModel } from '../models';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { generateAccessToken } from '../middleware/auth';
+import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../middleware/auth';
 
 // Register a new user
 export const registerUser = async (req: Request, res: Response, next: NextFunction) => {
@@ -30,11 +30,12 @@ export const registerUser = async (req: Request, res: Response, next: NextFuncti
       emailVerified: false,
     });
 
-    // Generate JWT token
+    // Generate JWT tokens
     const accessToken = generateAccessToken({
       id: user.id,
       email: user.email,
     });
+    const refreshTokenValue = generateRefreshToken({ id: user.id });
 
     // Return user info (without password) and token
     res.status(201).json({
@@ -49,6 +50,7 @@ export const registerUser = async (req: Request, res: Response, next: NextFuncti
         createdAt: user.createdAt,
       },
       accessToken,
+      refreshToken: refreshTokenValue,
     });
   } catch (error) {
     next(error);
@@ -72,11 +74,12 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Generate JWT token
+    // Generate JWT tokens
     const accessToken = generateAccessToken({
       id: user.id,
       email: user.email,
     });
+    const refreshTokenValue = generateRefreshToken({ id: user.id });
 
     // Return user info (without password) and token
     res.json({
@@ -91,27 +94,51 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
         createdAt: user.createdAt,
       },
       accessToken,
+      refreshToken: refreshTokenValue,
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Refresh token (simplified - in production you'd use refresh tokens)
-export const refreshToken = (req: Request, res: Response) => {
-  // For simplicity, we're just generating a new access token
-  // In a production app, you'd implement proper refresh token rotation
-  const user = (req as any).user;
-  if (!user) {
-    return res.sendStatus(401);
+/**
+ * Echange un refresh token contre un nouvel access token.
+ *
+ * La route est publique par construction : l'appelant a justement un access
+ * token expire. C'est le refresh token du corps de requete qui authentifie.
+ *
+ * Limite assumee en V1 : les refresh tokens ne sont pas stockes, donc pas
+ * revocables avant leur expiration. Une table dediee sera necessaire des que
+ * la deconnexion devra invalider une session a distance.
+ */
+export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = req.body?.refreshToken;
+
+    if (!token) {
+      return res.status(400).json({ message: 'refreshToken is required' });
+    }
+
+    let payload;
+    try {
+      payload = verifyRefreshToken(token);
+    } catch {
+      return res.status(401).json({ message: 'Invalid or expired refresh token' });
+    }
+
+    // Le compte a pu etre supprime depuis l'emission du token.
+    const user = await UserModel.findByPk(payload.id);
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid or expired refresh token' });
+    }
+
+    res.json({
+      accessToken: generateAccessToken({ id: user.id, email: user.email }),
+      refreshToken: generateRefreshToken({ id: user.id }),
+    });
+  } catch (error) {
+    next(error);
   }
-
-  const accessToken = generateAccessToken({
-    id: user.id,
-    email: user.email,
-  });
-
-  res.json({ accessToken });
 };
 
 // Logout user (client-side should remove token)
