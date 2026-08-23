@@ -5,6 +5,7 @@ import { Group } from './group';
 import { Event } from './event';
 import { EventInscription } from './eventInscription';
 import { GroupMember } from './groupMember';
+import { GroupInvitation } from './groupInvitation';
 
 // Initialize Sequelize connection
 export const sequelize = new Sequelize(env.databaseUrl, {
@@ -23,6 +24,7 @@ export const GroupModel = Group.initModel(sequelize);
 export const EventModel = Event.initModel(sequelize);
 export const EventInscriptionModel = EventInscription.initModel(sequelize);
 export const GroupMemberModel = GroupMember.initModel(sequelize);
+export const GroupInvitationModel = GroupInvitation.initModel(sequelize);
 
 // Set up associations
 User.associate = ({ Group, Event, EventInscription }) => {
@@ -76,11 +78,17 @@ GroupMember.associate = ({ Group, User }) => {
   GroupMember.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 };
 
+GroupInvitation.associate = ({ Group, User }) => {
+  GroupInvitation.belongsTo(Group, { foreignKey: 'groupId', as: 'group' });
+  GroupInvitation.belongsTo(User, { foreignKey: 'createdBy', as: 'inviter' });
+};
+
 // Call associate methods after all models are defined
 User.associate({ Group: GroupModel, Event: EventModel, EventInscription: EventInscriptionModel });
 Group.associate({ User: UserModel, Event: EventModel });
 Event.associate({ User: UserModel, Group: GroupModel, EventInscription: EventInscriptionModel });
 EventInscription.associate({ Event: EventModel, User: UserModel });
 GroupMember.associate({ Group: GroupModel, User: UserModel });
+GroupInvitation.associate({ Group: GroupModel, User: UserModel });
 
 export { sequelize as default };

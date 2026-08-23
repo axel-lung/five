@@ -54,6 +54,14 @@ export const updateEventStatusSchema = Joi.object({
   status: Joi.string().valid('draft', 'open', 'completed', 'cancelled').required(),
 });
 
+// G-02 : creation d'un lien d'invitation.
+export const createInvitationSchema = Joi.object({
+  role: Joi.string().valid('admin', 'member').default('member'),
+  expiresInDays: Joi.number().integer().min(1).max(90).default(7),
+  // Absent = illimite jusqu'a expiration.
+  maxUses: Joi.number().integer().min(1).max(500).optional(),
+});
+
 // Le middleware de validation vit dans middleware/validateRequest.ts.
 // Il en existait une seconde copie ici, chaque fichier important l'une ou
 // l'autre au hasard.

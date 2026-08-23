@@ -1,5 +1,31 @@
 import { Request, Response, NextFunction } from 'express';
-import { GroupModel as Group, UserModel as User, GroupMemberModel as GroupMember } from '../models';
+import { GroupModel as Group, UserModel as User, GroupMemberModel as GroupMember, sequelize } from '../models';
+import { Op } from 'sequelize';
+
+/**
+ * C-04 : profil minimal expose aux autres membres.
+ *
+ * `exclude: ['passwordHash']` etait insuffisant — il laissait passer email et
+ * telephone. On liste donc explicitement ce qui est partageable plutot que
+ * d'enumerer ce qui ne l'est pas : un champ ajoute plus tard reste prive
+ * par defaut.
+ */
+const PUBLIC_USER_ATTRIBUTES = [
+  'id',
+  'firstName',
+  'lastName',
+  'avatarUrl',
+  'city',
+  'preferredPosition',
+  'selfDeclaredLevel',
+];
+
+/** Un groupe prive n'est lisible que par ses membres (G-06). */
+const canViewGroup = async (group: any, userId: string): Promise<boolean> => {
+  if (group.accessType === 'public') return true;
+  const membership = await GroupMember.findOne({ where: { groupId: group.id, userId } });
+  return membership !== null;
+};
 import { createGroupSchema } from '../utils/validationSchemas';
 
 // Create a new group
@@ -22,16 +48,23 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Create group
-    const group = await Group.create({
-      name,
-      description,
-      city,
-      accessType,
-      ownerId: userId,
-    });
+    // Le proprietaire doit etre inscrit explicitement dans group_members :
+    // Sequelize ne peuple pas une association belongsToMany a la creation.
+    // Sans cette ligne, le createur n'est pas membre de son propre groupe et
+    // toutes les actions d'administration lui renvoient 403.
+    const group = await sequelize.transaction(async (t) => {
+      const created = await Group.create(
+        { name, description, city, accessType, ownerId: userId },
+        { transaction: t }
+      );
 
-    // Owner is automatically added as a member through the association
+      await GroupMember.create(
+        { groupId: created.id, userId, role: 'owner' },
+        { transaction: t }
+      );
+
+      return created;
+    });
 
     res.status(201).json(group);
   } catch (error) {
@@ -39,18 +72,40 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-// Get all groups (with pagination and filters - simplified for V0)
+/**
+ * G-06 / C-04 : liste des groupes de l'utilisateur, plus les groupes publics.
+ *
+ * L'implementation precedente renvoyait TOUS les groupes, prives compris, avec
+ * la liste complete des membres et leurs adresses email. Ici on ne renvoie ni
+ * membres ni emails : une liste n'a pas besoin de donnees personnelles, le
+ * detail d'un groupe est accessible via GET /groups/:id une fois membre.
+ */
 export const getGroups = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const userId = (req as any).user.id;
+
+    const memberships = await GroupMember.findAll({
+      where: { userId },
+      attributes: ['groupId'],
+    });
+    const memberGroupIds = memberships.map((m: any) => m.groupId);
+
     const groups = await Group.findAll({
-      include: [
-        { model: User, as: 'owner', attributes: { exclude: ['passwordHash'] } },
-        { model: User, as: 'members', attributes: { exclude: ['passwordHash'] } }
-      ],
-      order: [['createdAt', 'DESC']]
+      where: {
+        [Op.or]: [{ id: { [Op.in]: memberGroupIds } }, { accessType: 'public' }],
+      },
+      attributes: ['id', 'name', 'description', 'city', 'avatarUrl', 'accessType', 'ownerId', 'createdAt'],
+      order: [['createdAt', 'DESC']],
     });
 
-    res.json(groups);
+    const memberGroupIdSet = new Set(memberGroupIds);
+
+    res.json(
+      groups.map((group: any) => ({
+        ...group.toJSON(),
+        isMember: memberGroupIdSet.has(group.id),
+      }))
+    );
   } catch (error) {
     next(error);
   }
@@ -60,14 +115,22 @@ export const getGroups = async (req: Request, res: Response, next: NextFunction)
 export const getGroupById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const groupId = req.params.id;
+    const userId = (req as any).user.id;
+
     const group = await Group.findByPk(groupId, {
       include: [
-        { model: User, as: 'owner', attributes: { exclude: ['passwordHash'] } },
-        { model: User, as: 'members', attributes: { exclude: ['passwordHash'] } }
+        { model: User, as: 'owner', attributes: PUBLIC_USER_ATTRIBUTES },
+        { model: User, as: 'members', attributes: PUBLIC_USER_ATTRIBUTES }
       ]
     });
 
     if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    // 404 plutot que 403 : l'existence meme d'un groupe prive ne regarde pas
+    // les non-membres.
+    if (!(await canViewGroup(group, userId))) {
       return res.status(404).json({ message: 'Group not found' });
     }
 
@@ -173,8 +236,11 @@ export const addMember = async (req: Request, res: Response, next: NextFunction)
       return res.status(400).json({ message: 'User is already a member of this group' });
     }
 
-    // Add member
-    await (group as any).addMember(memberId, { through: { role: 'member' } });
+    // Insertion directe plutot que via l'association belongsToMany : celle-ci
+    // est declaree avec `through: 'group_members'` (une chaine), ce qui cree un
+    // modele intermediaire anonyme depourvu du defaut UUIDV4 sur `id`. L'INSERT
+    // partait alors sans identifiant et violait la contrainte NOT NULL.
+    await GroupMember.create({ groupId: group.id, userId: memberId, role: 'member' });
 
     res.status(201).json({ message: 'Member added successfully' });
   } catch (error) {
@@ -229,6 +295,7 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
 export const getGroupMembers = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const groupId = req.params.id;
+    const userId = (req as any).user.id;
 
     // Find group
     const group = await Group.findByPk(groupId);
@@ -236,9 +303,13 @@ export const getGroupMembers = async (req: Request, res: Response, next: NextFun
       return res.status(404).json({ message: 'Group not found' });
     }
 
+    if (!(await canViewGroup(group, userId))) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
     const members = await GroupMember.findAll({
       where: { groupId: group.id },
-      include: [{ model: User, attributes: { exclude: ['passwordHash'] } }]
+      include: [{ model: User, as: 'user', attributes: PUBLIC_USER_ATTRIBUTES }]
     });
 
     res.json(members);
