@@ -14,7 +14,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     if (err) {
       return res.sendStatus(403); // Forbidden
     }
-    req.user = user;
+    (req as any).user = user;
     next();
   });
 };

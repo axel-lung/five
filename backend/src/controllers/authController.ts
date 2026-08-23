@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { User } from '../models/user';
+import { UserModel } from '../models';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { generateAccessToken } from '../middleware/auth';
@@ -10,7 +10,7 @@ export const registerUser = async (req: Request, res: Response, next: NextFuncti
     const { email, password, firstName, lastName, phone, city } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({ where: { email } });
+    const existingUser = await UserModel.findOne({ where: { email } });
     if (existingUser) {
       return res.status(409).json({ message: 'User with this email already exists' });
     }
@@ -20,14 +20,14 @@ export const registerUser = async (req: Request, res: Response, next: NextFuncti
     const passwordHash = await bcrypt.hash(password, salt);
 
     // Create user
-    const user = await User.create({
+    const user = await UserModel.create({
       email,
       passwordHash,
       firstName,
       lastName,
       phone,
       city,
-      emailVerified: false, // In a real app, you'd send verification email
+      emailVerified: false,
     });
 
     // Generate JWT token
@@ -61,7 +61,7 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
     const { email, password } = req.body;
 
     // Find user by email
-    const user = await User.findOne({ where: { email } });
+    const user = await UserModel.findOne({ where: { email } });
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -101,7 +101,7 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
 export const refreshToken = (req: Request, res: Response) => {
   // For simplicity, we're just generating a new access token
   // In a production app, you'd implement proper refresh token rotation
-  const { user } = req;
+  const user = (req as any).user;
   if (!user) {
     return res.sendStatus(401);
   }

@@ -1,4 +1,4 @@
-import { Joi } from 'joi';
+import Joi from 'joi';
 
 // Registration validation schema
 export const registerSchema = Joi.object({
@@ -25,7 +25,7 @@ export const updateProfileSchema = Joi.object({
   bio: Joi.string().max(500).optional(),
   city: Joi.string().max(100).optional(),
   preferredPosition: Joi.string().max(50).optional(),
-  selfDeclaredLevel: Joi.number().min(1).max(5).optional(),
+  selfDeclaredLevel: Joi.number().min(1).min(1).max(5).optional(),
 });
 
 // Create group validation schema

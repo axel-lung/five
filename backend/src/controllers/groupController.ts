@@ -1,12 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
-import { Group, User } from '../models/index';
+import { GroupModel as Group, UserModel as User, GroupMemberModel as GroupMember } from '../models';
 import { validateRequest } from '../utils/validationSchemas';
 import { createGroupSchema } from '../utils/validationSchemas';
 
 // Create a new group
 export const createGroup = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
     const { error } = createGroupSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
@@ -32,8 +32,7 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
       ownerId: userId,
     });
 
-    // Add the owner as a member of the group
-    await group.addMember(userId, { through: { role: 'owner' } });
+    // Owner is automatically added as a member through the association
 
     res.status(201).json(group);
   } catch (error) {
@@ -83,7 +82,7 @@ export const getGroupById = async (req: Request, res: Response, next: NextFuncti
 export const updateGroup = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const groupId = req.params.id;
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
 
     // Find group and check ownership
     const group = await Group.findByPk(groupId);
@@ -121,7 +120,7 @@ export const updateGroup = async (req: Request, res: Response, next: NextFunctio
 export const deleteGroup = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const groupId = req.params.id;
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
 
     // Find group and check ownership
     const group = await Group.findByPk(groupId);
@@ -144,7 +143,7 @@ export const deleteGroup = async (req: Request, res: Response, next: NextFunctio
 export const addMember = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const groupId = req.params.id;
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
     const { memberId } = req.body; // ID of the user to invite
 
     // Find group and check ownership or admin rights
@@ -154,8 +153,10 @@ export const addMember = async (req: Request, res: Response, next: NextFunction)
     }
 
     // Check if the current user is owner or admin
-    const member = await group.getMembers({ where: { id: userId } });
-    if (member.length === 0 || !(member[0] as any).GroupMember.role === 'owner' || !(member[0] as any).GroupMember.role === 'admin') {
+    const userMembership = await GroupMember.findOne({
+      where: { groupId: group.id, userId: userId }
+    });
+    if (!userMembership || (userMembership.role !== 'owner' && userMembership.role !== 'admin')) {
       return res.status(403).json({ message: 'Not authorized to add members to this group' });
     }
 
@@ -166,8 +167,10 @@ export const addMember = async (req: Request, res: Response, next: NextFunction)
     }
 
     // Check if the user is already a member
-    const existingMember = await group.getMembers({ where: { id: memberId } });
-    if (existingMember.length > 0) {
+    const existingMember = await GroupMember.findOne({
+      where: { groupId: group.id, userId: memberId }
+    });
+    if (existingMember) {
       return res.status(400).json({ message: 'User is already a member of this group' });
     }
 
@@ -184,7 +187,7 @@ export const addMember = async (req: Request, res: Response, next: NextFunction)
 export const removeMember = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const groupId = req.params.id;
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
     const { memberId } = req.body; // ID of the user to remove
 
     // Find group and check ownership or admin rights
@@ -194,8 +197,10 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     }
 
     // Check if the current user is owner or admin
-    const member = await group.getMembers({ where: { id: userId } });
-    if (member.length === 0 || !(member[0] as any).GroupMember.role === 'owner' || !(member[0] as any).GroupMember.role === 'admin') {
+    const userMembership = await GroupMember.findOne({
+      where: { groupId: group.id, userId: userId }
+    });
+    if (!userMembership || (userMembership.role !== 'owner' && userMembership.role !== 'admin')) {
       return res.status(403).json({ message: 'Not authorized to remove members from this group' });
     }
 
@@ -211,7 +216,9 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     }
 
     // Remove member
-    await group.removeMember(memberId);
+    await GroupMember.destroy({
+      where: { groupId: group.id, userId: memberId }
+    });
 
     res.json({ message: 'Member removed successfully' });
   } catch (error) {

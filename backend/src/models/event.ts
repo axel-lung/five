@@ -1,5 +1,4 @@
 import { DataTypes, Model, Optional } from 'sequelize';
-import { sequelize } from './index';
 
 // Define the Event attributes interface
 interface EventAttributes {
@@ -22,10 +21,10 @@ interface EventAttributes {
 // Define the Event creation attributes
 interface EventCreationAttributes extends Optional<EventAttributes,
   'id' | 'description' | 'location' | 'level' | 'price' | 'groupId' |
-  'shareableLinkToken' | 'createdAt' | 'updatedAt'> {}
+  'shareableLinkToken' | 'createdAt' | 'updatedAt' | 'status'> {}
 
 // Define the Event model
-class Event extends Model<EventAttributes, EventCreationAttributes>
+export class Event extends Model<EventAttributes, EventCreationAttributes>
   implements EventAttributes {
   public id!: string;
   public title!: string;
@@ -41,97 +40,105 @@ class Event extends Model<EventAttributes, EventCreationAttributes>
   public shareableLinkToken!: string;
   public createdAt?: Date;
   public updatedAt?: Date;
+
+  // Initialize the Event model
+  public static initModel(sequelize: any) {
+    return Event.init(
+      {
+        id: {
+          type: DataTypes.UUID,
+          defaultValue: DataTypes.UUIDV4,
+          primaryKey: true,
+        },
+        title: {
+          type: DataTypes.STRING(255),
+          allowNull: false,
+        },
+        description: {
+          type: DataTypes.TEXT,
+          allowNull: true,
+        },
+        dateTime: {
+          type: DataTypes.DATE,
+          allowNull: false,
+        },
+        location: {
+          type: DataTypes.STRING(255),
+          allowNull: true,
+        },
+        capacity: {
+          type: DataTypes.INTEGER,
+          allowNull: false,
+          validate: {
+            min: 1,
+          },
+        },
+        level: {
+          type: DataTypes.STRING(50),
+          allowNull: true,
+        },
+        price: {
+          type: DataTypes.DECIMAL(10, 2),
+          allowNull: true,
+        },
+        status: {
+          type: DataTypes.ENUM('draft', 'open', 'full', 'completed', 'cancelled'),
+          allowNull: false,
+          defaultValue: 'draft',
+        },
+        organizerId: {
+          type: DataTypes.UUID,
+          allowNull: false,
+          references: {
+            model: 'users',
+            key: 'id',
+          },
+        },
+        groupId: {
+          type: DataTypes.UUID,
+          allowNull: true,
+          references: {
+            model: 'groups',
+            key: 'id',
+          },
+        },
+        shareableLinkToken: {
+          type: DataTypes.UUID,
+          allowNull: false,
+          defaultValue: DataTypes.UUIDV4,
+          unique: true,
+        },
+        createdAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+          defaultValue: DataTypes.NOW,
+        },
+        updatedAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+          defaultValue: DataTypes.NOW,
+        },
+      },
+      {
+        sequelize,
+        tableName: 'events',
+        timestamps: false,
+      }
+    );
+  }
+
+  // Associate method to be called from index.ts
+  public static associate = ({ UserModel, GroupModel, EventInscriptionModel }: any) => {
+    this.belongsTo(UserModel, { foreignKey: 'organizerId', as: 'organizer' });
+    this.belongsTo(GroupModel, { foreignKey: 'groupId', as: 'group' });
+    this.hasMany(EventInscriptionModel, { foreignKey: 'eventId', as: 'inscriptions' });
+    this.belongsToMany(UserModel, {
+      through: EventInscriptionModel,
+      foreignKey: 'eventId',
+      otherKey: 'userId',
+      as: 'participants'
+    });
+  };
 }
 
-// Initialize the Event model
-Event.init(
-  {
-    id: {
-      type: DataTypes.UUID,
-      defaultValue: DataTypes.UUIDV4,
-      primaryKey: true,
-    },
-    title: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-    },
-    description: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    dateTime: {
-      type: DataTypes.DATE,
-      allowNull: false,
-    },
-    location: {
-      type: DataTypes.STRING(255),
-      allowNull: true,
-    },
-    capacity: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      validate: {
-        min: 1,
-      },
-    },
-    level: {
-      type: DataTypes.STRING(50),
-      allowNull: true,
-    },
-    price: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: true,
-    },
-    status: {
-      type: DataTypes.ENUM('draft', 'open', 'full', 'completed', 'cancelled'),
-      allowNull: false,
-      defaultValue: 'draft',
-    },
-    organizerId: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      references: {
-        model: 'users',
-        key: 'id',
-      },
-    },
-    groupId: {
-      type: DataTypes.UUID,
-      allowNull: true,
-      references: {
-        model: 'groups',
-        key: 'id',
-      },
-    },
-    shareableLinkToken: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      defaultValue: DataTypes.UUIDV4,
-      unique: true,
-    },
-    createdAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      defaultValue: DataTypes.NOW,
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      defaultValue: DataTypes.NOW,
-    },
-  },
-  {
-    sequelize,
-    tableName: 'events',
-    timestamps: false,
-  }
-);
-
-// Define associations
-Event.associate = (models: any) => {
-  Event.belongsTo(models.User, { foreignKey: 'organizerId', as: 'organizer' });
-  Event.belongsTo(models.Group, { foreignKey: 'groupId', as: 'group' });
-  Event.hasMany(models.EventInscription, { foreignKey: 'eventId', as: 'inscriptions' });
-};
-
-export default Event;
+// Associations will be defined in index.ts

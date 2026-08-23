@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { Event, User, Group, EventInscription } from '../models/index';
+import { EventModel as Event, UserModel as User, GroupModel as Group, EventInscriptionModel as EventInscription } from '../models';
 import { Op } from 'sequelize';
 import { validateRequest } from '../utils/validationSchemas';
 import { createEventSchema } from '../utils/validationSchemas';
@@ -7,7 +7,7 @@ import { createEventSchema } from '../utils/validationSchemas';
 // Create a new event
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
     const { error } = createEventSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
@@ -44,6 +44,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       capacity,
       level,
       price,
+      status: 'open', // Default status for new events
       organizerId: userId,
       groupId: groupId || null,
     });
@@ -102,11 +103,7 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
         {
           model: User,
           as: 'participants',
-          through: {
-            model: EventInscription,
-            as: 'inscription',
-            attributes: ['status', 'registeredAt']
-          },
+          through: { model: EventInscription },
           attributes: { exclude: ['passwordHash'] }
         }
       ]
@@ -126,7 +123,7 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
 export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
 
     // Find event and check ownership
     const event = await Event.findByPk(eventId);
@@ -179,7 +176,7 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
 export const deleteEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
 
     // Find event and check ownership
     const event = await Event.findByPk(eventId);
@@ -202,7 +199,7 @@ export const deleteEvent = async (req: Request, res: Response, next: NextFunctio
 export const joinEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
 
     // Find event
     const event = await Event.findByPk(eventId);
@@ -252,7 +249,7 @@ export const joinEvent = async (req: Request, res: Response, next: NextFunction)
 export const leaveEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
 
     // Find inscription
     const inscription = await EventInscription.findOne({

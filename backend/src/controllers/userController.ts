@@ -1,12 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
-import { User } from '../models/user';
+import { UserModel as User } from '../models';
 import { validateRequest } from '../utils/validationSchemas';
 import { updateProfileSchema } from '../utils/validationSchemas';
 
 // Get user profile
 export const getUserProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
     const user = await User.findByPk(userId, {
       attributes: { exclude: ['passwordHash'] }
     });
@@ -24,7 +24,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
 // Update user profile
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = (req as any).user.id;
     const { error } = updateProfileSchema.validate(req.body);
     if (error) {
       return res.status(400).json({

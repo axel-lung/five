@@ -1,8 +1,7 @@
 import { DataTypes, Model, Optional } from 'sequelize';
-import { sequelize } from './index';
 
-// Define the User attributes interface
-interface UserAttributes {
+// Define the User attributes
+export interface UserAttributes {
   id: string;
   email: string;
   passwordHash: string;
@@ -20,13 +19,13 @@ interface UserAttributes {
   updatedAt?: Date;
 }
 
-// Define the User creation attributes (what's needed to create a User)
-interface UserCreationAttributes extends Optional<UserAttributes,
+// Define the User creation attributes
+export interface UserCreationAttributes extends Optional<UserAttributes,
   'id' | 'avatarUrl' | 'bio' | 'city' | 'preferredPosition' | 'selfDeclaredLevel' |
   'emailVerified' | 'phoneVerified' | 'createdAt' | 'updatedAt'> {}
 
 // Define the User model
-class User extends Model<UserAttributes, UserCreationAttributes>
+export class User extends Model<UserAttributes, UserCreationAttributes>
   implements UserAttributes {
   public id!: string;
   public email!: string;
@@ -43,103 +42,102 @@ class User extends Model<UserAttributes, UserCreationAttributes>
   public phoneVerified?: boolean;
   public createdAt?: Date;
   public updatedAt?: Date;
-}
 
-// Initialize the User model
-User.init(
-  {
-    id: {
-      type: DataTypes.UUID,
-      defaultValue: DataTypes.UUIDV4,
-      primaryKey: true,
-    },
-    email: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-      unique: true,
-      validate: {
-        isEmail: true,
+  // Initialize the User model
+  public static initModel(sequelize: any) {
+    return User.init(
+      {
+        id: {
+          type: DataTypes.UUID,
+          defaultValue: DataTypes.UUIDV4,
+          primaryKey: true,
+        },
+        email: {
+          type: DataTypes.STRING(255),
+          allowNull: false,
+          unique: true,
+        },
+        passwordHash: {
+          type: DataTypes.STRING,
+          allowNull: false,
+        },
+        firstName: {
+          type: DataTypes.STRING(100),
+          allowNull: true,
+        },
+        lastName: {
+          type: DataTypes.STRING(100),
+          allowNull: true,
+        },
+        phone: {
+          type: DataTypes.STRING(20),
+          allowNull: true,
+        },
+        avatarUrl: {
+          type: DataTypes.TEXT,
+          allowNull: true,
+        },
+        bio: {
+          type: DataTypes.TEXT,
+          allowNull: true,
+        },
+        city: {
+          type: DataTypes.STRING(100),
+          allowNull: true,
+        },
+        preferredPosition: {
+          type: DataTypes.STRING(50),
+          allowNull: true,
+        },
+        selfDeclaredLevel: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+        },
+        emailVerified: {
+          type: DataTypes.BOOLEAN,
+          allowNull: false,
+          defaultValue: false,
+        },
+        phoneVerified: {
+          type: DataTypes.BOOLEAN,
+          allowNull: false,
+          defaultValue: false,
+        },
+        createdAt: {
+          type: DataTypes.DATE,
+          allowNull: false,
+          defaultValue: DataTypes.NOW,
+        },
+        updatedAt: {
+          type: DataTypes.DATE,
+          allowNull: false,
+          defaultValue: DataTypes.NOW,
+        },
       },
-    },
-    passwordHash: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-    },
-    firstName: {
-      type: DataTypes.STRING(100),
-      allowNull: true,
-    },
-    lastName: {
-      type: DataTypes.STRING(100),
-      allowNull: true,
-    },
-    phone: {
-      type: DataTypes.STRING(20),
-      allowNull: true,
-    },
-    avatarUrl: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    bio: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    city: {
-      type: DataTypes.STRING(100),
-      allowNull: true,
-    },
-    preferredPosition: {
-      type: DataTypes.STRING(50),
-      allowNull: true,
-    },
-    selfDeclaredLevel: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      validate: {
-        min: 1,
-        max: 5,
-      },
-    },
-    emailVerified: {
-      type: DataTypes.BOOLEAN,
-      allowNull: true,
-      defaultValue: false,
-    },
-    phoneVerified: {
-      type: DataTypes.BOOLEAN,
-      allowNull: true,
-      defaultValue: false,
-    },
-    createdAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      defaultValue: DataTypes.NOW,
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      defaultValue: DataTypes.NOW,
-    },
-  },
-  {
-    sequelize,
-    tableName: 'users',
-    timestamps: false, // We're handling timestamps manually
+      {
+        sequelize,
+        tableName: 'users',
+        timestamps: false,
+      }
+    );
   }
-);
 
-// Define associations (will be implemented in the index.ts file)
-// User.associate = (models: any) => {
-//   User.hasMany(models.Group, { foreignKey: 'ownerId', as: 'ownedGroups' });
-//   User.belongsToMany(models.Group, {
-//     through: 'group_members',
-//     foreignKey: 'userId',
-//     otherKey: 'groupId',
-//     as: 'groups'
-//   });
-//   User.hasMany(models.Event, { foreignKey: 'organizerId', as: 'organizedEvents' });
-//   User.hasMany(models.EventInscription, { foreignKey: 'userId', as: 'eventInscriptions' });
-// };
-
-export default User;
+  // Associate method to be called from index.ts
+  public static associate = ({ GroupModel, EventModel, EventInscriptionModel }: any) => {
+    this.hasMany(GroupModel, { foreignKey: 'ownerId', as: 'ownedGroups' });
+    this.belongsToMany(GroupModel, {
+      through: 'group_members',
+      foreignKey: 'userId',
+      otherKey: 'groupId',
+      as: 'groups'
+    });
+    this.hasMany(EventModel, { foreignKey: 'organizerId', as: 'organizedEvents' });
+    this.hasMany(EventInscriptionModel, { foreignKey: 'userId', as: 'eventInscriptions' });
+    this.belongsToMany(EventModel, {
+      through: EventInscriptionModel,
+      foreignKey: 'userId',
+      otherKey: 'eventId',
+      as: 'events'
+    });
+  };
+}
