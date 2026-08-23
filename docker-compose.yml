@@ -27,7 +27,7 @@ services:
     image: minio/minio:latest
     container_name: five_minio
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    command: server /data --console-address ":9011"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin_${MINIO_PASSWORD:-changeme}
@@ -36,7 +36,7 @@ services:
     networks:
       - traefik
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      test: ["CMD", "curl", "-f", "http://localhost:9010/minio/health/ready"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -52,13 +52,13 @@ services:
       - .env.example
     environment:
       - DATABASE_URL=postgresql://five_user:${DB_PASSWORD:-changeme}@db:5432/five
-      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ENDPOINT=minio:9010
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=${MINIO_PASSWORD:-changeme}
       - MINIO_USE_SSL=false
       - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_change_this_in_production}
       - NODE_ENV=development
-      - PORT=3000
+      - PORT=3010
     volumes:
       - ./backend/src:/usr/src/app/src
       - ./backend/package.json:/usr/src/app/package.json
@@ -79,7 +79,7 @@ services:
       minio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spare", "http://localhost:3000/health || exit 1"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spare", "http://localhost:3010/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
