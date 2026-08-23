@@ -1,11 +1,33 @@
 version: '3.8'
 
 services:
+  # Traefik Reverse Proxy
+  traefik:
+    image: traefik:v2.10
+    container_name: five_traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"      # HTTP
+      - "443:443"    # HTTPS
+      - "8080:8080"  # Traefik Dashboard (optional)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./acme.json:/acme.json
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.myresolver.acme.tlschallenge=true
+      - --certificatesresolvers.myresolver.acme.email=admin@alng.fr
+      - --certificatesresolvers.myresolver.acme.storage=/acme.json
+    networks:
+      - five-network
 
   # PostgreSQL Database
   db:
-    networks:
-      - traefik
     image: postgres:15-alpine
     container_name: five_db
     restart: unless-stopped
@@ -17,7 +39,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init-scripts/db.init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
-      - traefik
+      - five-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U five_user -d five"]
       interval: 10s
@@ -36,7 +58,7 @@ services:
     volumes:
       - minio_data:/data
     networks:
-      - traefik
+      - five-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
       interval: 10s
@@ -65,7 +87,7 @@ services:
       - ./backend/package.json:/usr/src/app/package.json
       - ./backend/tsconfig.json:/usr/src/app/tsconfig.json
     networks:
-      - traefik
+      - five-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.five-api.rule=Host(`five.alng.fr`) && PathPrefix(`/api`)"
@@ -101,7 +123,7 @@ services:
       - ./frontend/src:/usr/src/app/src
       - ./frontend/package.json:/usr/src/app/package.json
     networks:
-      - traefik
+      - five-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.five-frontend.rule=Host(`five.alng.fr`) && PathPrefix(`/`) || PathPrefixSlice(`/`, 1)"
@@ -112,8 +134,8 @@ services:
       - backend
 
 networks:
-  traefik:
-    external: true
+  five-network:
+    driver: bridge
 
 volumes:
   postgres_data:
