@@ -6,13 +6,11 @@ import { EventInscription } from './eventInscription';
 import { GroupMember } from './groupMember';
 
 // Initialize Sequelize connection
-export const sequelize = new Sequelize(
-  process.env.DATABASE_URL || 'postgresql://five_user:five_password@localhost:5432/five',
-  {
-    dialect: 'postgres',
-    logging: false,
-  }
-);
+export const sequelize = new Sequelize({
+  dialect: 'sqlite',
+  storage: ':memory:',
+  logging: false,
+});
 
 // Initialize models
 export const UserModel = User.initModel(sequelize);
@@ -22,62 +20,62 @@ export const EventInscriptionModel = EventInscription.initModel(sequelize);
 export const GroupMemberModel = GroupMember.initModel(sequelize);
 
 // Set up associations
-UserModel.associate = ({ GroupModel, EventModel, EventInscriptionModel }) => {
-  UserModel.hasMany(GroupModel, { foreignKey: 'ownerId', as: 'ownedGroups' });
-  UserModel.belongsToMany(GroupModel, {
+User.associate = ({ Group, Event, EventInscription }) => {
+  User.hasMany(Group, { foreignKey: 'ownerId', as: 'ownedGroups' });
+  User.belongsToMany(Group, {
     through: 'group_members',
     foreignKey: 'userId',
     otherKey: 'groupId',
     as: 'groups'
   });
-  UserModel.hasMany(EventModel, { foreignKey: 'organizerId', as: 'organizedEvents' });
-  UserModel.hasMany(EventInscriptionModel, { foreignKey: 'userId', as: 'eventInscriptions' });
-  UserModel.belongsToMany(EventModel, {
-    through: EventInscriptionModel,
+  User.hasMany(Event, { foreignKey: 'organizerId', as: 'organizedEvents' });
+  User.hasMany(EventInscription, { foreignKey: 'userId', as: 'eventInscriptions' });
+  User.belongsToMany(Event, {
+    through: EventInscription,
     foreignKey: 'userId',
     otherKey: 'eventId',
     as: 'events'
   });
 };
 
-GroupModel.associate = ({ UserModel, EventModel }) => {
-  GroupModel.belongsTo(UserModel, { foreignKey: 'ownerId', as: 'owner' });
-  GroupModel.belongsToMany(UserModel, {
+Group.associate = ({ User, Event }) => {
+  Group.belongsTo(User, { foreignKey: 'ownerId', as: 'owner' });
+  Group.belongsToMany(User, {
     through: 'group_members',
     foreignKey: 'groupId',
     otherKey: 'userId',
     as: 'members'
   });
-  GroupModel.hasMany(EventModel, { foreignKey: 'groupId', as: 'events' });
+  Group.hasMany(Event, { foreignKey: 'groupId', as: 'events' });
 };
 
-EventModel.associate = ({ UserModel, GroupModel, EventInscriptionModel }) => {
-  EventModel.belongsTo(UserModel, { foreignKey: 'organizerId', as: 'organizer' });
-  EventModel.belongsTo(GroupModel, { foreignKey: 'groupId', as: 'group' });
-  EventModel.hasMany(EventInscriptionModel, { foreignKey: 'eventId', as: 'inscriptions' });
-  EventModel.belongsToMany(UserModel, {
-    through: EventInscriptionModel,
+Event.associate = ({ User, Group, EventInscription }) => {
+  Event.belongsTo(User, { foreignKey: 'organizerId', as: 'organizer' });
+  Event.belongsTo(Group, { foreignKey: 'groupId', as: 'group' });
+  Event.hasMany(EventInscription, { foreignKey: 'eventId', as: 'inscriptions' });
+  Event.belongsToMany(User, {
+    through: EventInscription,
     foreignKey: 'eventId',
     otherKey: 'userId',
     as: 'participants'
   });
 };
 
-EventInscriptionModel.associate = ({ EventModel, UserModel }) => {
-  EventInscriptionModel.belongsTo(EventModel, { foreignKey: 'eventId', as: 'event' });
-  EventInscriptionModel.belongsTo(UserModel, { foreignKey: 'userId', as: 'user' });
+EventInscription.associate = ({ Event, User }) => {
+  EventInscription.belongsTo(Event, { foreignKey: 'eventId', as: 'event' });
+  EventInscription.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 };
 
-GroupMemberModel.associate = ({ GroupModel, UserModel }) => {
-  GroupMemberModel.belongsTo(GroupModel, { foreignKey: 'groupId', as: 'group' });
-  GroupMemberModel.belongsTo(UserModel, { foreignKey: 'userId', as: 'user' });
+GroupMember.associate = ({ Group, User }) => {
+  GroupMember.belongsTo(Group, { foreignKey: 'groupId', as: 'group' });
+  GroupMember.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 };
 
 // Call associate methods after all models are defined
-UserModel.associate({ GroupModel: GroupModel, EventModel: EventModel, EventInscriptionModel: EventInscriptionModel });
-GroupModel.associate({ UserModel: UserModel, EventModel: EventModel });
-EventModel.associate({ UserModel: UserModel, GroupModel: GroupModel, EventInscriptionModel: EventInscriptionModel });
-EventInscriptionModel.associate({ EventModel: EventModel, UserModel: UserModel });
-GroupMemberModel.associate({ GroupModel: GroupModel, UserModel: UserModel });
+User.associate({ Group: GroupModel, Event: EventModel, EventInscription: EventInscriptionModel });
+Group.associate({ User: UserModel, Event: EventModel });
+Event.associate({ User: UserModel, Group: GroupModel, EventInscription: EventInscriptionModel });
+EventInscription.associate({ Event: EventModel, User: UserModel });
+GroupMember.associate({ Group: GroupModel, User: UserModel });
 
 export { sequelize as default };

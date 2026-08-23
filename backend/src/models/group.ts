@@ -87,17 +87,17 @@ export class Group extends Model<GroupAttributes, GroupCreationAttributes>
     );
   }
 
-// Associations will be defined in index.ts
-}
-
   // Associate method to be called from index.ts
-  public static associate = ({ UserModel, EventModel }: any) => {
-    this.belongsTo(UserModel, { foreignKey: 'ownerId', as: 'owner' });
-    this.belongsToMany(UserModel, {
+  public static associate = ({ User, Event }: any) => {
+    this.belongsTo(User, { foreignKey: 'ownerId', as: 'owner' });
+    this.belongsToMany(User, {
       through: 'group_members',
       foreignKey: 'groupId',
       otherKey: 'userId',
       as: 'members'
     });
-    this.hasMany(EventModel, { foreignKey: 'groupId', as: 'events' });
+    this.hasMany(Event, { foreignKey: 'groupId', as: 'events' });
   };
+}
+
+// Associations will be defined in index.ts

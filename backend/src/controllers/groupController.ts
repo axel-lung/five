@@ -175,7 +175,7 @@ export const addMember = async (req: Request, res: Response, next: NextFunction)
     }
 
     // Add member
-    await group.addMember(memberId, { through: { role: 'member' } });
+    await (group as any).addMember(memberId, { through: { role: 'member' } });
 
     res.status(201).json({ message: 'Member added successfully' });
   } catch (error) {
@@ -237,7 +237,8 @@ export const getGroupMembers = async (req: Request, res: Response, next: NextFun
       return res.status(404).json({ message: 'Group not found' });
     }
 
-    const members = await group.getMembers({
+    const members = await GroupMember.findAll({
+      where: { groupId: group.id },
       include: [{ model: User, attributes: { exclude: ['passwordHash'] } }]
     });
 

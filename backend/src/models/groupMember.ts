@@ -65,12 +65,12 @@ export class GroupMember extends Model<GroupMemberAttributes, GroupMemberCreatio
       }
     );
   }
-}
 
-// Associate method to be called from index.ts
-GroupMember.associate = ({ GroupModel, UserModel }: any) => {
-  GroupMember.belongsTo(GroupModel, { foreignKey: 'groupId', as: 'group' });
-  GroupMember.belongsTo(UserModel, { foreignKey: 'userId', as: 'user' });
-};
+  // Associate method to be called from index.ts
+  public static associate = ({ GroupModel, UserModel }: any) => {
+    this.belongsTo(GroupModel, { foreignKey: 'groupId', as: 'group' });
+    this.belongsTo(UserModel, { foreignKey: 'userId', as: 'user' });
+  };
+}
 
 // Associations will be defined in index.ts

@@ -103,7 +103,6 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
         {
           model: User,
           as: 'participants',
-          through: { model: EventInscription },
           attributes: { exclude: ['passwordHash'] }
         }
       ]
