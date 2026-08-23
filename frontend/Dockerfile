@@ -1,17 +1,20 @@
 # Frontend Dockerfile
-FROM node:18-alpine as build
+FROM node:18-alpine AS build
 
 # Create app directory
 WORKDIR /usr/src/app
 
 # Install app dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Bundle app source
 COPY . .
 
-# Build the app
+# Vite fige les variables VITE_* au moment du build : elles doivent arriver
+# par --build-arg, pas par l'environnement du conteneur au runtime.
+ARG VITE_APP_API_URL
+ENV VITE_APP_API_URL=$VITE_APP_API_URL
 RUN npm run build
 
 # Production stage

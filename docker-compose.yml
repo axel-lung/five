@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -34,19 +32,16 @@ services:
       - "6010"
       - "6011"
     ports:
-      - "6011:6011"   # expose console to host for debugging
+      - "127.0.0.1:6011:6011"   # console, accessible en local uniquement (ssh -L pour y accéder)
     volumes:
       - minio_data:/data
     networks:
       - traefik
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6010/minio/health/ready"]
+      test: ["CMD", "mc", "ready", "local"]
       interval: 10s
       timeout: 5s
       retries: 5
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.five-minio.loadbalancer.server.port=6010"
 
   # Backend API (Node.js/TypeScript)
   backend:
@@ -55,33 +50,25 @@ services:
       dockerfile: Dockerfile
     container_name: five_backend
     restart: unless-stopped
-    env_file:
-      - .env.example
     environment:
-      - DATABASE_URL=postgresql://five_user:${DB_PASSWORD:-changeme}@db:5432/five
+      - DATABASE_URL=postgresql://five_user:five_password_${DB_PASSWORD:-changeme}@db:5432/five
       - MINIO_ENDPOINT=minio:6010
       - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=${MINIO_PASSWORD:-changeme}
+      - MINIO_SECRET_KEY=minioadmin_${MINIO_PASSWORD:-changeme}
       - MINIO_USE_SSL=false
-      - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_change_this_in_production}
-      - NODE_ENV=development
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET doit être defini dans .env}
+      - NODE_ENV=production
       - PORT=6010
     expose:
       - "6010"
     ports:
-      - "6010:6010"   # expose backend API to host for debugging
-    volumes:
-      - ./backend/src:/usr/src/app/src
-      - ./backend/package.json:/usr/src/app/package.json
-      - ./backend/tsconfig.json:/usr/src/app/tsconfig.json
+      - "127.0.0.1:6010:6010"   # debug en local uniquement ; le trafic public passe par Traefik
     networks:
       - traefik
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.five-api.rule=Host(`five.alng.fr`) && PathPrefix(`/api`)"
       - "traefik.http.routers.five-api.entrypoints=websecure"
-      - "traefik.http.routers.five-api.middlewares=api-prefix"
-      - "traefik.http.middlewares.api-prefix.stripprefix.prefixes=/api"
       - "traefik.http.routers.five-api.tls=true"
       - "traefik.http.routers.five-api.tls.certresolver=myresolver"
       - "traefik.http.routers.five-api.priority=20"
@@ -90,9 +77,9 @@ services:
       db:
         condition: service_healthy
       minio:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spare", "http://localhost:6010/health || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:6010/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -102,32 +89,35 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_APP_API_URL: https://five.alng.fr/api
     container_name: five_frontend
     restart: unless-stopped
-    env_file:
-      - .env.example
-    environment:
-      - REACT_APP_API_URL=https://five.alng.fr/api
-      - NODE_ENV=production
     expose:
       - "80"
-    volumes:
-      - ./frontend/src:/usr/src/app/src
-      - ./frontend/package.json:/usr/src/app/package.json
     networks:
       - traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.five-frontend.rule=Host(`five.alng.fr`) && PathPrefix(`/`)"
+      - "traefik.http.routers.five-frontend.rule=Host(`five.alng.fr`)"
       - "traefik.http.routers.five-frontend.entrypoints=websecure"
       - "traefik.http.routers.five-frontend.tls=true"
       - "traefik.http.routers.five-frontend.tls.certresolver=myresolver"
-      - "traefik.http.routers.five-frontend.priority=0"
+      - "traefik.http.routers.five-frontend.priority=1"
+      - "traefik.http.services.five-frontend.loadbalancer.server.port=80"
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
+  # Reseau du Traefik deja en place sur le serveur (cree hors de ce projet).
+  # Doit correspondre au reseau reellement utilise par ton Traefik.
   traefik:
+    name: traefik
     external: true
 
 volumes:

@@ -2,12 +2,14 @@
 # Stage 1: Build TypeScript code
 FROM node:18-alpine AS builder
 
-# Create app directory
 WORKDIR /usr/src/app
+
+# sqlite3 est un module natif : il doit etre compile pour musl (Alpine)
+RUN apk add --no-cache python3 make g++
 
 # Install app dependencies (including dev dependencies for build)
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Bundle app source
 COPY . .
@@ -15,21 +17,31 @@ COPY . .
 # Build TypeScript to JavaScript
 RUN npm run build
 
-# Stage 2: Production runtime
-FROM node:18-alpine
+# Stage 2: Production dependencies only
+FROM node:18-alpine AS deps
 
-# Create app directory
 WORKDIR /usr/src/app
 
-# Copy built JavaScript from builder stage
-COPY --from=builder /usr/src/app/dist ./dist
+RUN apk add --no-cache python3 make g++
 
-# Install production dependencies only
 COPY package*.json ./
-RUN npm install --only=production
+RUN npm ci --omit=dev && npm cache clean --force
 
-# Expose port
-EXPOSE 3000
+# Stage 3: Production runtime
+FROM node:18-alpine
+
+WORKDIR /usr/src/app
+
+# Copy production node_modules and built JavaScript
+COPY --from=deps /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/dist ./dist
+COPY package*.json ./
+
+# Run as an unprivileged user (the node image ships a `node` user)
+USER node
+
+# Expose port (doit correspondre a PORT dans docker-compose.yml)
+EXPOSE 6010
 
 # Start the server
 CMD [ "node", "dist/server.js" ]
