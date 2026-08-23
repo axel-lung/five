@@ -68,7 +68,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.five-api.rule=Host(`five.alng.fr`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.five-api.entrypoints=web"
+      - "traefik.http.routers.five-api.entrypoints=websecure"
       - "traefik.http.routers.five-api.middlewares=api-prefix"
       - "traefik.http.middlewares.api-prefix.stripprefix.prefixes=/api"
       - "traefik.http.routers.five-api.tls=true"
