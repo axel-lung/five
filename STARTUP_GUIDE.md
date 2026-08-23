@@ -1,6 +1,6 @@
-# Five/Futsal V0 - Startup and Testing Guide
+# Five/Futsal V0 - Startup and Testing Guide (with Traefik)
 
-This guide will help you start the application and test the core functionality to validate that V0 successfully addresses the core problem.
+This guide will help you start the application using Traefik as a reverse proxy for HTTPS termination and domain-based routing (five.alng.fr), and test the core functionality to validate that V0 successfully addresses the core problem.
 
 ## 🚀 Quick Start Summary
 
@@ -13,20 +13,27 @@ cp .env.example .env
 #    - MINIO_PASSWORD  
 #    - JWT_SECRET
 
-# 3. Start all services
+# 3. Ensure you have a domain pointing to this machine's IP:
+#    - five.alng.fr should resolve to your server's public IP
+#    - For local testing, you can add to /etc/hosts:
+#        <your-server-ip> five.alng.fr
+
+# 4. Start all services (includes Traefik)
 docker-compose up -d
 
-# 4. Wait for initialization (1-2 minutes)
+# 5. Wait for initialization (1-2 minutes)
 #    Check status with: docker-compose ps
+#    Traefik will obtain SSL certificates from Let's Encrypt (if domain is public and accessible)
 
-# 5. Access the application
-#    Frontend: http://localhost:3000
-#    API Docs: http://localhost:3001/api (if you add Swagger later)
-#    MinIO Console: http://localhost:9001
+# 6. Access the application via HTTPS
+#    Frontend: https://five.alng.fr
+#    Traefik Dashboard: http://<server-ip>:8080 (optional)
+#    API: https://five.alng.fr/api
+#    MinIO Console: http://<server-ip>:9001 (optional, not exposed via Traefik by default)
 
-# 6. Test the core flows (see detailed steps below)
+# 7. Test the core flows (see detailed steps below)
 
-# 7. When done:
+# 8. When done:
 docker-compose down          # Stop services
 docker-compose down -v       # Stop and delete all data
 ```
@@ -45,34 +52,55 @@ MINIO_PASSWORD=your_secure_minio_password
 JWT_SECRET=a_very_long_and_random_string_for_jwt_signing
 ```
 
-### Step 2: Start Services
+### Step 2: Domain Configuration
+For Traefik to work with HTTPS, you need a domain pointing to your machine:
+
+**Option A: Public Domain (Recommended for production-like testing)**
+- Ensure you own `alng.fr` or a subdomain
+- Create an A record: `five.alng.fr` → `<your-server-public-IP>`
+- Wait for DNS propagation (can take minutes to hours)
+- Make sure ports 80 and 443 are open in your firewall
+
+**Option B: Local Testing (using /etc/hosts)**
+On your local machine (where you'll browse), add to `/etc/hosts`:
+```
+<your-server-IP> five.alng.fr
+```
+Replace `<your-server-IP>` with the actual IP of the machine running Docker.
+Note: This only works on the machine where you edit the hosts file.
+
+### Step 3: Start Services
 ```bash
 docker-compose up -d
 ```
 
-### Step 3: Wait for Initialization
+### Step 4: Wait for Initialization
 On first startup, services need time to initialize:
 - PostgreSQL: Creates database and runs init script
 - Backend: Installs dependencies, builds TypeScript, starts server
 - Frontend: Installs dependencies, builds React app
 - MinIO: Creates storage buckets
+- Traefik: Starts and obtains SSL certificates (if using public domain)
 
 Check progress:
 ```bash
 docker-compose ps
-docker-compose logs -f backend  # Follow backend logs
-docker-compose logs -f frontend # Follow frontend logs
+docker-compose logs -f traefik   # Watch Traefik startup and certificate acquisition
+docker-compose logs -f backend   # Follow backend logs
+docker-compose logs -f frontend  # Follow frontend logs
 ```
 
 Services are ready when:
-- All show "healthy" in docker-compose ps
+- All show "healthy" or "Up" in `docker-compose ps`
+- Traefik logs show "Certificate acquired" for your domain (if public)
 - Backend logs show "Server is running on port 3000"
-- Frontend logs show Vite dev server ready (if using dev mode) or nginx serving static files
+- Frontend is served via Traefik at https://five.alng.fr
 
-### Step 4: Access the Application
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:3001 (health check at http://localhost:3001/health)
-- **MinIO Console**: http://localhost:9001 (login: minioadmin / your MINIO_PASSWORD)
+### Step 5: Access the Application
+- **Frontend**: https://five.alng.fr
+- **Backend API**: https://five.alng.fr/api (health check at https://five.alng.fr/api/health)
+- **Traefik Dashboard**: http://<server-ip>:8080 (if exposed, optional)
+- **MinIO Console**: http://<server-ip>:9001 (login: minioadmin / your MINIO_PASSWORD) - *not proxied by Traefik in this config*
 - **PostgreSQL**: localhost:5432 (database: five, user: five_user, password: from .env)
 
 ## 🧪 Testing Core Functionality
@@ -80,7 +108,7 @@ Services are ready when:
 Follow these steps to validate that V0 solves the core problem described in CCH.md:
 
 ### Test 1: User Account Creation & Authentication
-1. Go to http://localhost:3000
+1. Go to https://five.alng.fr
 2. Click "S'inscrire" (Register)
 3. Fill in:
    - Email: test@example.com
@@ -126,7 +154,7 @@ Follow these steps to validate that V0 solves the core problem described in CCH.
 To test waitlist:
 1. Create an event with capacity of 1
 2. Join the event with your first account (should get confirmed)
-3. Login with a second account
+3. Login with a second account (use a different browser or incognito)
 4. Try to join the same event
 5. Verify you get waitlist status
 6. Have the first account leave the event
@@ -149,90 +177,91 @@ To test waitlist:
 
 After completing the tests, verify that V0 successfully addresses the core problem:
 
-✅ **Account Creation Flow**: Users can register and login securely  
+✅ **Account Creation Flow**: Users can register and login securely via HTTPS  
 ✅ **Group Creation & Management**: Organizers can create groups and manage members  
 ✅ **Event Lifecycle**: Events can be created with date/time/location/capacity, users can join/waitlist  
-✅ **Navigation & Discovery**: Users can browse upcoming events  
+✅ **Navigation & Discovery**: Users can browse upcoming events via secure domain  
 ✅ **Data Persistence**: Information survives container restarts  
-✅ **Docker Readiness**: All services run in containers with proper volume mounting  
+✅ **Docker Readiness**: All services run in containers with proper volume mounting and Traefik reverse proxy  
+✅ **Security**: Traffic encrypted via Let's Encrypt certificates (for public domains)  
 
-## 🔍 Troubleshooting Common Issues
+## 📚 Prochaines Étapes
 
-### "Connection refused" errors
-- Wait longer for services to initialize
-- Check specific service logs: `docker-compose logs [service-name]`
-- Verify ports aren't conflicting with other applications
+Selon les résultats de vos tests et la validation avec votre groupe de Reims (comme indiqué dans le plan des 90 jours du CCH.md) :
 
-### Database connection errors
-- Check PostgreSQL service is healthy: `docker-compose ps`
-- Verify DATABASE_URL in backend/.env matches docker-compose service
-- Check backend logs for connection details
+1. **Recueillir des retours** : Faites tester par 2-3 organisateurs/joueurs réels via https://five.alng.fr
+2. **Mesurer l'activation** : Combien créent des groupes/events après inscription ?
+3. **Décider de la suite** : Selon la validation, poursuivre vers V1.5 (paiement + FiveComposer) ou ajuster
 
-### Frontend not showing data
-- Check browser console for JavaScript errors (F12 → Console)
-- Verify API calls are succeeding in Network tab
-- Check that REACT_APP_API_URL is correctly set (if using .env in frontend)
-
-### Authentication issues
-- Clear localStorage or use incognito mode to test fresh login
-- Check that JWT_SECRET is consistent between backend and any middleware
-- Verify tokens are being stored and sent correctly
-
-### File upload issues (if implementing later)
-- Verify MinIO service is running
-- Check that MinIO credentials in backend/.env match the service
-- Ensure bucket permissions are correct
-
-## 📝 Notes for Validation
-
-According to CCH.md section 4.2 (Plan des 90 premiers jours), V0 validation should include:
-- ✅ Prototype cliquable (clickable prototype) - Achieved through functional React UI
-- ✅ Test de création d'événement et inscription - Tested above
-- ✅ Landing page - Available at http://localhost:3000
-- ✅ Groupe de Reims connecté - Can be simulated with test data
-- ✅ Instrumentation d'événements et activation - Through API endpoints and UI feedback
-
-## 🔄 Next Steps After Validation
-
-Once you've validated that V0 successfully addresses the core problem:
-1. Collect feedback from test users (organisateurs et joueurs)
-2. Measure activation and retention metrics
-3. Decide whether to proceed to V1.5 based on validation results
-4. Consider adding:
-   - Payment processing (V1.5)
-   - FiveComposer/team generation (V1.5)
-   - Advanced social features (V2)
-   - Premium features (V1.5+)
-
-## 🛑 Stopping and Cleaning Up
+## 🛑 Arrêt et Nettoyage
 
 ```bash
-# Stop services but keep data
+# Arrêter mais garder les données
 docker-compose down
 
-# Stop services and delete all data (use with caution!)
+# Arrêter ET supprimer toutes les données (à utiliser avec précaution !)
 docker-compose down -v
 
-# View service logs for debugging
+# Voir les logs pour déboguer
+docker-compose logs traefik
 docker-compose logs backend
 docker-compose logs frontend
 docker-compose logs db
 docker-compose logs minio
 ```
 
-## 💡 Tips for Successful Validation
+## 💡 Conseil pour une Validation Réussie
 
-1. **Test with realistic scenarios**: Try to replicate how you'd actually use the app for organizing five sessions
-2. **Involve potential users**: If possible, have 2-3 friends test the registration, group creation, and event joining flows
-3. **Focus on pain points**: Pay special attention to whether the app solves the "quatre douleurs réelles" from CCH.md:
-   - Collecter l'argent (deferred to V1.5)
-   - Compléter la liste (tested via waitlist)
-   - Organiser / relancer (tested via group/event management)
-   - Équilibrer les équipes (deferred to V1.5 FourComposer)
-4. **Keep it simple**: V0 is about validation, not perfection. Focus on whether the core concept works.
+Concentrez-vous sur la résolution des **"quatre douleurs réelles"** identifiées dans le CCH.md (même si certaines seront traitées en V1.5) :
+1. **Collecter l'argent** → À venir en V1.5 (paiement conditionnel)
+2. **Compléter la liste** → Testez la fonctionnalité de liste d'attente
+3. **Organiser/relancer** → Testez la gestion de groupes et d'événements + notifications de base
+4. **Équilibrer les équipes** → À venir en V1.5 (FiveComposer)
+
+Si ces flux de base fonctionnent et répondent aux besoins principaux d'organisation de sessions de five, alors votre validation V0 est réussie et vous pouvez décider en connaissance de cause d'investir dans V1.5 et au-delà.
+
+**Bonne validation !** 🎯
 
 ---
 
-**Rappel**: L'objectif de V0 est de "tester le problème avant de construire" (CCH.md ligne 682). Si ces flux de base fonctionnent et résolvent les problèmes principaux d'organisation de sessions de five, alors vous avez réussi votre validation et pouvez décider en connaissance de cause d'investir dans V1.5 et au-delà.
+## 📝 Notes Importantes sur Traefik et HTTPS
 
-Bonne validation! 🎯
+### Certificats SSL
+- Avec un domaine public et un email valide, Traefik obtient automatiquement des certificats Let's Encrypt
+- Les certificats sont stockés dans `acme.json` (veillez à ce que ce fichier ait les permissions 600)
+- Pour les tests locaux avec `/etc/hosts`, vous aurez des erreurs de certificat (domaine non correspondant) - vous pouvez passer outre dans le navigateur pour les tests
+
+### Sécurité
+- Ne jamais commettre `.env` avec de vrais mots de passe
+- En production, considérez l'utilisation de Docker secrets ou d'un gestionnaire de secrets externe
+- Le tableau de bord Traefik (`:8080`) est exposé par défaut - vous pouvez le désactiver ou le sécuriser en production
+
+### Dépannage Courant
+
+**"502 Bad Gateway"**
+- Vérifiez que le service backend/frontend est healthy: `docker-compose ps`
+- Vérifiez les labels Traefik dans docker-compose.yml
+- Regardez les logs de Traefik: `docker-compose logs traefik`
+
+"Certificate not found"
+- Pour les domaines publics: assurez-vous que les ports 80/443 sont accessibles depuis l'extérieur
+- Vérifiez que votre email est correctement configuré dans traefik.yml
+- Attendez quelques minutes après le démarrage - la acquisition de certificat peut prendre du temps
+
+"Site can't be reached"
+- Vérifiez que votre domaine pointe bien vers l'IP du serveur
+- Testez avec `curl -I https://five.alng.fr` depuis une machine externe
+- Vérifiez que le pare-feu autorise les entrées sur les ports 80 et 443
+
+## 🔄 Workflow avec GitHub
+
+Puisque votre projet est sur GitHub, vous pouvez facilement le mettre à jour sur les deux machines :
+
+```bash
+# Sur chaque machine:
+git pull origin main   # Récupérer les dernières modifications
+# Puis redémarrer si nécessaire:
+docker-compose up -d --build
+```
+
+---

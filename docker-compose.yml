@@ -1,6 +1,31 @@
 version: '3.8'
 
 services:
+  # Traefik Reverse Proxy
+  traefik:
+    image: traefik:v2.10
+    container_name: five_traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"      # HTTP
+      - "443:443"    # HTTPS
+      - "8080:8080"  # Traefik Dashboard (optional)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./acme.json:/acme.json
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.myresolver.acme.tlschallenge=true
+      - --certificatesresolvers.myresolver.acme.email=admin@alng.fr
+      - --certificatesresolvers.myresolver.acme.storage=/acme.json
+    networks:
+      - five-network
+
   # PostgreSQL Database
   db:
     image: postgres:15-alpine
@@ -13,8 +38,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-scripts/db.init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "5432:5432"
+    networks:
+      - five-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U five_user -d five"]
       interval: 10s
@@ -32,9 +57,8 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin_${MINIO_PASSWORD:-changeme}
     volumes:
       - minio_data:/data
-    ports:
-      - "9000:9000"   # API
-      - "9001:9001"   # Console
+    networks:
+      - five-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
       interval: 10s
@@ -62,8 +86,16 @@ services:
       - ./backend/src:/usr/src/app/src
       - ./backend/package.json:/usr/src/app/package.json
       - ./backend/tsconfig.json:/usr/src/app/tsconfig.json
-    ports:
-      - "3001:3000"
+    networks:
+      - five-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.five-api.rule=Host(`five.alng.fr`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.five-api.entrypoints=web"
+      - "traefik.http.routers.five-api.middlewares=api-prefix"
+      - "traefik.http.middlewares.api-prefix.stripprefix.prefixes=/api"
+      - "traefik.http.routers.five-api.tls=true"
+      - "traefik.http.routers.five-api.tls.certresolver=myresolver"
     depends_on:
       db:
         condition: service_healthy
@@ -85,36 +117,25 @@ services:
     env_file:
       - .env.example
     environment:
-      - REACT_APP_API_URL=http://localhost:3001
-      - NODE_ENV=development
+      - REACT_APP_API_URL=https://five.alng.fr/api
+      - NODE_ENV=production
     volumes:
       - ./frontend/src:/usr/src/app/src
       - ./frontend/package.json:/usr/src/app/package.json
-    ports:
-      - "3000:3000"
+    networks:
+      - five-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.five-frontend.rule=Host(`five.alng.fr`) && PathPrefix(`/`) || PathPrefixSlice(`/`, 1)"
+      - "traefik.http.routers.five-frontend.entrypoints=websecure"
+      - "traefik.http.routers.five-frontend.tls=true"
+      - "traefik.http.routers.five-frontend.tls.certresolver=myresolver"
     depends_on:
       - backend
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spare", "http://localhost:3000 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # Nginx Reverse Proxy
-  nginx:
-    image: nginx:alpine
-    container_name: five_nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./frontend/build:/usr/share/nginx/html:ro  # For production build
-    depends_on:
-      - frontend
-      - backend
+networks:
+  five-network:
+    driver: bridge
 
 volumes:
   postgres_data:
