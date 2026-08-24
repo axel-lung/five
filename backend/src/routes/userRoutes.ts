@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { getUserProfile, updateUserProfile } from '../controllers/userController';
 import { deleteAccount, exportAccount, getPublicProfile } from '../controllers/accountController';
 import { blockUser, unblockUser, listBlocks } from '../controllers/moderationController';
+import { uploadUserAvatar } from '../controllers/mediaController';
+import { uploadImage } from '../middleware/upload';
 import { validateRequest } from '../middleware/validateRequest';
 import { authenticateToken } from '../middleware/auth';
 import { updateProfileSchema } from '../utils/validationSchemas';
@@ -25,6 +27,9 @@ router.delete('/me', deleteAccount);
 router.get('/me/blocks', listBlocks);
 router.post('/:id/block', blockUser);
 router.delete('/:id/block', unblockUser);
+
+// C-02 : avatar. Avant '/:id', qui capturerait 'avatar'.
+router.post('/avatar', uploadImage('avatar'), uploadUserAvatar);
 
 // D-02 : profil public. En DERNIER : '/:id' capturerait sinon '/profile' et
 // '/me/export', declares plus haut.

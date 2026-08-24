@@ -11,6 +11,7 @@ import reportRoutes from './routes/reportRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import adminRoutes from './routes/adminRoutes';
 import venueRoutes from './routes/venueRoutes';
+import mediaRoutes from './routes/mediaRoutes';
 import { authLimiter } from './middleware/rateLimit';
 
 /**
@@ -22,7 +23,14 @@ import { authLimiter } from './middleware/rateLimit';
 export const app: Express = express();
 
 // Middleware
-app.use(helmet());
+app.use(
+  helmet({
+    // Les avatars sont servis par l'API et affiches par le frontend, sur une
+    // origine differente. La politique par defaut de helmet
+    // (Cross-Origin-Resource-Policy: same-origin) les bloquerait.
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 app.use(cors());
 if (env.nodeEnv !== 'test') {
   app.use(morgan('dev'));
@@ -41,6 +49,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/venues', venueRoutes);
+app.use('/api/media', mediaRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {

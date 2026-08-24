@@ -28,6 +28,8 @@ import {
   transferOwnershipSchema,
 } from '../utils/validationSchemas';
 import { createLimiter } from '../middleware/rateLimit';
+import { uploadGroupAvatar } from '../controllers/mediaController';
+import { uploadImage } from '../middleware/upload';
 
 const router = Router();
 
@@ -55,6 +57,9 @@ router.post('/:id/members', addMember);
 router.delete('/:id/members', removeMember);
 router.get('/:id/members', getGroupMembers);
 router.post('/:id/leave', leaveGroup);
+
+// G-01 : avatar du groupe.
+router.post('/:id/avatar', uploadImage('avatar'), uploadGroupAvatar);
 
 // G-03 : roles et transmission du groupe. Sans transfer-ownership, leaveGroup
 // est un cul-de-sac pour le proprietaire.
