@@ -12,7 +12,7 @@ export const createUser = async (overrides: Record<string, unknown> = {}) => {
 
   const res = await request(app)
     .post('/api/auth/register')
-    .send({ email, password: 'Test1234!', firstName: `User${counter}`, ...overrides });
+    .send({ email, password: 'Test1234!', firstName: `User${counter}`, acceptTos: true, ...overrides });
 
   if (res.status !== 201) {
     throw new Error(`createUser a echoue (${res.status}): ${JSON.stringify(res.body)}`);

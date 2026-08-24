@@ -9,7 +9,10 @@ const Register: React.FC = () => {
     firstName: '',
     lastName: '',
     phone: '',
-    city: ''
+    city: '',
+    // C-01 : consentements separes, les CGU sont obligatoires cote API.
+    acceptTos: false,
+    acceptMarketing: false
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,10 +20,10 @@ const Register: React.FC = () => {
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -167,9 +170,38 @@ const Register: React.FC = () => {
             />
           </div>
 
+          <div className="space-y-2 pt-2">
+            <label htmlFor="acceptTos" className="flex items-start gap-2 text-sm text-gray-700">
+              <input
+                id="acceptTos"
+                type="checkbox"
+                name="acceptTos"
+                checked={formData.acceptTos}
+                onChange={handleChange}
+                className="mt-1"
+                disabled={loading}
+                required
+              />
+              <span>J'accepte les conditions générales d'utilisation.</span>
+            </label>
+
+            <label htmlFor="acceptMarketing" className="flex items-start gap-2 text-sm text-gray-700">
+              <input
+                id="acceptMarketing"
+                type="checkbox"
+                name="acceptMarketing"
+                checked={formData.acceptMarketing}
+                onChange={handleChange}
+                className="mt-1"
+                disabled={loading}
+              />
+              <span>Je souhaite recevoir les actualités de Five (facultatif).</span>
+            </label>
+          </div>
+
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !formData.acceptTos}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-md transition"
           >
             {loading ? 'Création...' : 'S\'inscrire'}

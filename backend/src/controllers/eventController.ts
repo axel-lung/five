@@ -7,9 +7,10 @@ import {
   EventInscriptionModel as EventInscription,
   sequelize,
 } from '../models';
-import { Op, Transaction } from 'sequelize';
+import { Op } from 'sequelize';
 import { createEventSchema } from '../utils/validationSchemas';
 import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
+import { cancelInscription, syncCapacityStatus } from '../services/inscriptions';
 
 /**
  * G-06 / C-04 : un evenement rattache a un groupe prive ne regarde que ses
@@ -50,27 +51,6 @@ const visibleGroupIds = async (userId: string): Promise<string[]> => {
   });
 
   return groups.map((g: any) => g.id);
-};
-
-/**
- * Recalcule 'open' <-> 'full' a partir du nombre de places confirmees.
- * Les statuts pilotes par l'organisateur (draft, completed, cancelled) ne sont
- * jamais ecrases : seule la bascule liee a la capacite est automatique.
- */
-const syncCapacityStatus = async (event: any, t: Transaction): Promise<void> => {
-  if (event.status !== 'open' && event.status !== 'full') {
-    return;
-  }
-
-  const confirmedCount = await EventInscription.count({
-    where: { eventId: event.id, status: 'confirmed' },
-    transaction: t,
-  });
-
-  const nextStatus = confirmedCount >= event.capacity ? 'full' : 'open';
-  if (nextStatus !== event.status) {
-    await event.update({ status: nextStatus }, { transaction: t });
-  }
 };
 
 // Create a new event
@@ -380,25 +360,9 @@ export const leaveEvent = async (req: Request, res: Response, next: NextFunction
         return { error: { code: 404, message: 'You are not registered for this event' } };
       }
 
-      const wasConfirmed = inscription.status === 'confirmed';
-      await inscription.update({ status: 'cancelled' }, { transaction: t });
+      const promotedUserId = await cancelInscription(event, inscription, t);
 
-      let promoted = null;
-      if (wasConfirmed) {
-        promoted = await EventInscription.findOne({
-          where: { eventId, status: 'waitlist' },
-          order: [['registeredAt', 'ASC']],
-          transaction: t,
-        });
-
-        if (promoted) {
-          await promoted.update({ status: 'confirmed' }, { transaction: t });
-        }
-      }
-
-      await syncCapacityStatus(event, t);
-
-      return { promotedUserId: promoted ? promoted.userId : null };
+      return { promotedUserId };
     });
 
     if (result.error) {

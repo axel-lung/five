@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getUserProfile, updateUserProfile } from '../controllers/userController';
+import { deleteAccount, exportAccount } from '../controllers/accountController';
 import { validateRequest } from '../middleware/validateRequest';
 import { authenticateToken } from '../middleware/auth';
 import { updateProfileSchema } from '../utils/validationSchemas';
@@ -12,5 +13,10 @@ router.use(authenticateToken);
 
 router.get('/profile', getUserProfile);
 router.put('/profile', validateRequest(updateProfileSchema), updateUserProfile);
+
+// C-06 : export et effacement RGPD. `me` plutot que `:id` : ces deux actions
+// ne concernent jamais qu'un compte, celui de l'appelant.
+router.get('/me/export', exportAccount);
+router.delete('/me', deleteAccount);
 
 export default router;

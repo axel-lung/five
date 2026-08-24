@@ -7,7 +7,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
   try {
     const userId = (req as any).user.id;
     const user = await User.findByPk(userId, {
-      attributes: { exclude: ['passwordHash'] }
+      attributes: { exclude: ['passwordHash', 'emailVerificationToken'] }
     });
 
     if (!user) {
@@ -53,7 +53,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
     }
 
     const updatedUser = await User.findByPk(userId, {
-      attributes: { exclude: ['passwordHash'] }
+      attributes: { exclude: ['passwordHash', 'emailVerificationToken'] }
     });
 
     res.json(updatedUser);

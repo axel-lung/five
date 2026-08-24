@@ -15,6 +15,11 @@ export interface UserAttributes {
   selfDeclaredLevel?: number;
   emailVerified?: boolean;
   phoneVerified?: boolean;
+  deletedAt?: Date | null;
+  consentTosAt?: Date | null;
+  consentMarketingAt?: Date | null;
+  emailVerificationToken?: string | null;
+  emailVerificationSentAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -40,6 +45,11 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
   public selfDeclaredLevel?: number;
   public emailVerified?: boolean;
   public phoneVerified?: boolean;
+  public deletedAt?: Date | null;
+  public consentTosAt?: Date | null;
+  public consentMarketingAt?: Date | null;
+  public emailVerificationToken?: string | null;
+  public emailVerificationSentAt?: Date | null;
   public createdAt?: Date;
   public updatedAt?: Date;
 
@@ -102,6 +112,27 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
           type: DataTypes.BOOLEAN,
           allowNull: false,
           defaultValue: false,
+        },
+        // C-06 : un compte efface est anonymise sur place, jamais supprime.
+        deletedAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+        },
+        consentTosAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+        },
+        consentMarketingAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+        },
+        emailVerificationToken: {
+          type: DataTypes.UUID,
+          allowNull: true,
+        },
+        emailVerificationSentAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
         },
       },
       {

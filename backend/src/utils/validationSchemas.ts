@@ -8,6 +8,12 @@ export const registerSchema = Joi.object({
   lastName: Joi.string().max(100).optional(),
   phone: Joi.string().max(20).optional(),
   city: Joi.string().max(100).optional(),
+  // C-01 : consentements separes. Les CGU sont obligatoires — d'ou
+  // `valid(true)`, qui refuse un `false` explicite autant qu'une absence. Le
+  // marketing reste facultatif : l'accepter ne doit jamais etre la condition
+  // de la creation de compte.
+  acceptTos: Joi.boolean().valid(true).required(),
+  acceptMarketing: Joi.boolean().default(false),
 });
 
 // Login validation schema
