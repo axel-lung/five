@@ -3,6 +3,9 @@ node_modules*
 backend/node_modules/*
 frontend/node_modules/*
 
+# Base Postgres ephemere des tests
+backend/.pg-test/
+
 # Build outputs
 dist/*
 build/*

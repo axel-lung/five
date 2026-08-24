@@ -1,46 +1,9 @@
-import express, { Express, Request, Response, NextFunction } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
+import { app } from './app';
 import { env } from './config/env';
 import { sequelize } from './models/index';
 import { migrator } from './db/migrator';
-import userRoutes from './routes/userRoutes';
-import groupRoutes from './routes/groupRoutes';
-import eventRoutes from './routes/eventRoutes';
-import authRoutes from './routes/authRoutes';
 
-const app: Express = express();
 const PORT = env.port;
-
-// Middleware
-app.use(helmet());
-app.use(cors());
-app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/groups', groupRoutes);
-app.use('/api/events', eventRoutes);
-
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// 404 handler
-app.use((req: Request, res: Response, next: NextFunction) => {
-  res.status(404).json({ message: 'Route not found' });
-});
-
-// Error handler
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
-});
 
 // Database connection and server start
 const startServer = async () => {

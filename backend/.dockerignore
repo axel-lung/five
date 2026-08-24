@@ -11,3 +11,7 @@ npm-debug.log*
 .idea
 Dockerfile
 .dockerignore
+test
+jest.config.js
+tsconfig.test.json
+.pg-test

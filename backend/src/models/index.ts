@@ -27,10 +27,14 @@ export const GroupMemberModel = GroupMember.initModel(sequelize);
 export const GroupInvitationModel = GroupInvitation.initModel(sequelize);
 
 // Set up associations
-User.associate = ({ Group, Event, EventInscription }) => {
+User.associate = ({ Group, Event, EventInscription, GroupMember }) => {
   User.hasMany(Group, { foreignKey: 'ownerId', as: 'ownedGroups' });
+  // `through` doit recevoir le MODELE, pas le nom de table : une chaine fait
+  // fabriquer a Sequelize un modele intermediaire anonyme qui herite de
+  // timestamps: true et reclame created_at/updated_at, colonnes absentes de
+  // group_members (qui n'a qu'un joined_at).
   User.belongsToMany(Group, {
-    through: 'group_members',
+    through: GroupMember,
     foreignKey: 'userId',
     otherKey: 'groupId',
     as: 'groups'
@@ -45,10 +49,10 @@ User.associate = ({ Group, Event, EventInscription }) => {
   });
 };
 
-Group.associate = ({ User, Event }) => {
+Group.associate = ({ User, Event, GroupMember }) => {
   Group.belongsTo(User, { foreignKey: 'ownerId', as: 'owner' });
   Group.belongsToMany(User, {
-    through: 'group_members',
+    through: GroupMember,
     foreignKey: 'groupId',
     otherKey: 'userId',
     as: 'members'
@@ -84,8 +88,8 @@ GroupInvitation.associate = ({ Group, User }) => {
 };
 
 // Call associate methods after all models are defined
-User.associate({ Group: GroupModel, Event: EventModel, EventInscription: EventInscriptionModel });
-Group.associate({ User: UserModel, Event: EventModel });
+User.associate({ Group: GroupModel, Event: EventModel, EventInscription: EventInscriptionModel, GroupMember: GroupMemberModel });
+Group.associate({ User: UserModel, Event: EventModel, GroupMember: GroupMemberModel });
 Event.associate({ User: UserModel, Group: GroupModel, EventInscription: EventInscriptionModel });
 EventInscription.associate({ Event: EventModel, User: UserModel });
 GroupMember.associate({ Group: GroupModel, User: UserModel });

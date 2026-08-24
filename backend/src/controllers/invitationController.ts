@@ -111,7 +111,7 @@ export const acceptInvitation = async (req: Request, res: Response, next: NextFu
         lock: t.LOCK.UPDATE,
       });
 
-      if (!invitation || !invitation.isUsable()) {
+      if (!invitation) {
         return { error: { code: 404, message: 'Invitation not found or no longer valid' } };
       }
 
@@ -120,10 +120,15 @@ export const acceptInvitation = async (req: Request, res: Response, next: NextFu
         transaction: t,
       });
 
-      // Idempotent : re-cliquer sur le lien ne doit ni echouer ni consommer
-      // une utilisation supplementaire.
+      // Idempotence testee AVANT l'utilisabilite : sur une invitation a usage
+      // unique, la premiere acceptation epuise le lien, et re-cliquer dessus
+      // renverrait sinon 404 a quelqu'un qui est deja membre.
       if (existing) {
         return { groupId: invitation.groupId, alreadyMember: true };
+      }
+
+      if (!invitation.isUsable()) {
+        return { error: { code: 404, message: 'Invitation not found or no longer valid' } };
       }
 
       await GroupMember.create(
