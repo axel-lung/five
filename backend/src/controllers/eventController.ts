@@ -1,7 +1,56 @@
 import { Request, Response, NextFunction } from 'express';
-import { EventModel as Event, UserModel as User, GroupModel as Group, EventInscriptionModel as EventInscription, sequelize } from '../models';
+import {
+  EventModel as Event,
+  UserModel as User,
+  GroupModel as Group,
+  GroupMemberModel as GroupMember,
+  EventInscriptionModel as EventInscription,
+  sequelize,
+} from '../models';
 import { Op, Transaction } from 'sequelize';
 import { createEventSchema } from '../utils/validationSchemas';
+import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
+
+/**
+ * G-06 / C-04 : un evenement rattache a un groupe prive ne regarde que ses
+ * membres. Meme regle que canViewGroup cote groupes, appliquee ici a
+ * l'evenement via son groupe.
+ *
+ * Un evenement sans groupe reste visible : il n'existe que par son lien
+ * partageable (E-07), et la recherche de sessions ouvertes (D-01) est ciblee
+ * V1.5. L'organisateur voit toujours le sien, y compris en brouillon.
+ */
+const canViewEvent = async (event: any, userId: string): Promise<boolean> => {
+  if (event.organizerId === userId) return true;
+  if (!event.groupId) return true;
+
+  const group = await Group.findByPk(event.groupId);
+  if (!group) return true;
+  if (group.accessType === 'public') return true;
+
+  const membership = await GroupMember.findOne({ where: { groupId: group.id, userId } });
+  return membership !== null;
+};
+
+/** Les groupes dont l'appelant peut voir les evenements : les siens + les publics. */
+const visibleGroupIds = async (userId: string): Promise<string[]> => {
+  const memberships = await GroupMember.findAll({
+    where: { userId },
+    attributes: ['groupId'],
+  });
+
+  const groups = await Group.findAll({
+    where: {
+      [Op.or]: [
+        { id: { [Op.in]: memberships.map((m: any) => m.groupId) } },
+        { accessType: 'public' },
+      ],
+    },
+    attributes: ['id'],
+  });
+
+  return groups.map((g: any) => g.id);
+};
 
 /**
  * Recalcule 'open' <-> 'full' a partir du nombre de places confirmees.
@@ -78,6 +127,8 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 // Get all events (with filtering and pagination - simplified for V0)
 export const getEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const userId = (req as any).user.id;
+
     // Get query parameters for filtering
     const { date, city, level } = req.query;
 
@@ -85,7 +136,16 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
     // 'full' doit rester visible : un evenement complet interesse toujours,
     // ne serait-ce que pour rejoindre la liste d'attente. Seuls draft,
     // completed et cancelled sont masques.
-    const whereClause: any = { status: { [Op.in]: ['open', 'full'] } };
+    const whereClause: any = {
+      status: { [Op.in]: ['open', 'full'] },
+      // Sans ce filtre, la liste renvoyait les evenements de TOUS les groupes,
+      // prives compris, a n'importe quel compte authentifie.
+      [Op.or]: [
+        { groupId: null },
+        { groupId: { [Op.in]: await visibleGroupIds(userId) } },
+        { organizerId: userId },
+      ],
+    };
 
     if (date) {
       const startDate = new Date(date as string);
@@ -103,7 +163,7 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
     const events = await Event.findAll({
       where: whereClause,
       include: [
-        { model: User, as: 'organizer', attributes: { exclude: ['passwordHash'] } },
+        { model: User, as: 'organizer', attributes: PUBLIC_USER_ATTRIBUTES },
         { model: Group, as: 'group' }
       ],
       order: [['dateTime', 'ASC']]
@@ -119,19 +179,27 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
 export const getEventById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
+    const userId = (req as any).user.id;
+
     const event = await Event.findByPk(eventId, {
       include: [
-        { model: User, as: 'organizer', attributes: { exclude: ['passwordHash'] } },
+        { model: User, as: 'organizer', attributes: PUBLIC_USER_ATTRIBUTES },
         { model: Group, as: 'group' },
         {
           model: User,
           as: 'participants',
-          attributes: { exclude: ['passwordHash'] }
+          attributes: PUBLIC_USER_ATTRIBUTES
         }
       ]
     });
 
     if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // 404 plutot que 403 : l'existence d'un evenement de groupe prive ne
+    // regarde pas les non-membres, comme pour getGroupById.
+    if (!(await canViewEvent(event, userId))) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
@@ -183,7 +251,7 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
 
     const updatedEvent = await Event.findByPk(eventId, {
       include: [
-        { model: User, as: 'organizer', attributes: { exclude: ['passwordHash'] } },
+        { model: User, as: 'organizer', attributes: PUBLIC_USER_ATTRIBUTES },
         { model: Group, as: 'group' }
       ]
     });
@@ -445,10 +513,15 @@ export const getSharedEvent = async (req: Request, res: Response, next: NextFunc
 export const getEventParticipants = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
+    const userId = (req as any).user.id;
 
     // Find event
     const event = await Event.findByPk(eventId);
     if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    if (!(await canViewEvent(event, userId))) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
@@ -458,7 +531,7 @@ export const getEventParticipants = async (req: Request, res: Response, next: Ne
         {
           model: User,
           as: 'user',
-          attributes: { exclude: ['passwordHash'] }
+          attributes: PUBLIC_USER_ATTRIBUTES
         }
       ],
       order: [['registeredAt', 'ASC']]

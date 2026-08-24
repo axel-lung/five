@@ -1,4 +1,4 @@
-import { api, createUser, createEvent } from './helpers';
+import { api, createUser, createEvent, createGroup } from './helpers';
 
 const join = (token: string, eventId: string) =>
   api().post(`/api/events/${eventId}/join`).set('Authorization', `Bearer ${token}`);
@@ -243,5 +243,129 @@ describe('Liste des evenements', () => {
       .set('Authorization', `Bearer ${organizer.accessToken}`);
 
     expect(res.body.map((e: any) => e.id)).toContain(event.id);
+  });
+});
+
+describe('Visibilite des evenements (G-06 / C-04)', () => {
+  const invite = (token: string, groupId: string) =>
+    api().post(`/api/groups/${groupId}/invitations`).set('Authorization', `Bearer ${token}`).send({});
+
+  const accept = (token: string, inviteToken: string) =>
+    api().post(`/api/groups/invitations/${inviteToken}/accept`).set('Authorization', `Bearer ${token}`);
+
+  /** Un organisateur, son groupe prive, un evenement dedans, et un membre. */
+  const privateGroupEvent = async () => {
+    const organizer = await createUser();
+    const member = await createUser();
+    const outsider = await createUser();
+
+    const group = await createGroup(organizer.accessToken, { accessType: 'private' });
+    const invitation = await invite(organizer.accessToken, group.id);
+    await accept(member.accessToken, invitation.body.token);
+
+    const event = await createEvent(organizer.accessToken, { groupId: group.id });
+    return { organizer, member, outsider, group, event };
+  };
+
+  it('renvoie 404 a un tiers sur l-evenement d-un groupe prive', async () => {
+    const { outsider, event } = await privateGroupEvent();
+
+    const res = await getEvent(outsider.accessToken, event.id);
+    expect(res.status).toBe(404);
+  });
+
+  it('laisse un membre du groupe consulter l-evenement', async () => {
+    const { member, event } = await privateGroupEvent();
+
+    const res = await getEvent(member.accessToken, event.id);
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(event.id);
+  });
+
+  it('laisse toujours l-organisateur consulter son evenement', async () => {
+    const { organizer, event } = await privateGroupEvent();
+
+    const res = await getEvent(organizer.accessToken, event.id);
+    expect(res.status).toBe(200);
+  });
+
+  it('ne liste pas l-evenement d-un groupe prive tiers', async () => {
+    const { outsider, event } = await privateGroupEvent();
+
+    const res = await api()
+      .get('/api/events')
+      .set('Authorization', `Bearer ${outsider.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((e: any) => e.id)).not.toContain(event.id);
+  });
+
+  it('liste l-evenement d-un groupe public', async () => {
+    const organizer = await createUser();
+    const outsider = await createUser();
+    const group = await createGroup(organizer.accessToken, { accessType: 'public' });
+    const event = await createEvent(organizer.accessToken, { groupId: group.id });
+
+    const res = await api()
+      .get('/api/events')
+      .set('Authorization', `Bearer ${outsider.accessToken}`);
+
+    expect(res.body.map((e: any) => e.id)).toContain(event.id);
+  });
+
+  it('renvoie 404 a un tiers sur les participants d-un groupe prive', async () => {
+    const { outsider, event } = await privateGroupEvent();
+
+    const res = await api()
+      .get(`/api/events/${event.id}/participants`)
+      .set('Authorization', `Bearer ${outsider.accessToken}`);
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('Donnees personnelles des participants (C-04)', () => {
+  // Le nettoyage avait ete fait cote groupes mais jamais reporte ici : les
+  // includes renvoyaient encore email et telephone en clair.
+  it('n-expose ni email ni telephone dans le detail d-un evenement', async () => {
+    const organizer = await createUser({ phone: '0600000000' });
+    const player = await createUser({ phone: '0611111111' });
+    const event = await createEvent(organizer.accessToken);
+    await join(player.accessToken, event.id);
+
+    const res = await getEvent(player.accessToken, event.id);
+
+    expect(res.status).toBe(200);
+    expect(res.body.organizer).not.toHaveProperty('email');
+    expect(res.body.organizer).not.toHaveProperty('phone');
+    expect(res.body.participants).toHaveLength(1);
+    expect(res.body.participants[0]).not.toHaveProperty('email');
+    expect(res.body.participants[0]).not.toHaveProperty('phone');
+  });
+
+  it('n-expose ni email ni telephone dans la liste des participants', async () => {
+    const organizer = await createUser();
+    const player = await createUser({ phone: '0611111111' });
+    const event = await createEvent(organizer.accessToken);
+    await join(player.accessToken, event.id);
+
+    const res = await api()
+      .get(`/api/events/${event.id}/participants`)
+      .set('Authorization', `Bearer ${organizer.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].user).not.toHaveProperty('email');
+    expect(res.body[0].user).not.toHaveProperty('phone');
+  });
+
+  it('n-expose pas l-email de l-organisateur dans la liste des evenements', async () => {
+    const organizer = await createUser();
+    await createEvent(organizer.accessToken);
+
+    const res = await api()
+      .get('/api/events')
+      .set('Authorization', `Bearer ${organizer.accessToken}`);
+
+    expect(res.body[0].organizer).not.toHaveProperty('email');
   });
 });
