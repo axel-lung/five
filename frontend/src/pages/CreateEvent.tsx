@@ -6,6 +6,7 @@ import { Alert, Button, Field, inputClass, PageTitle } from '../components/ui';
 const CreateEvent: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [groups, setGroups] = useState<any[]>([]);
+  const [venues, setVenues] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     dateTime: '',
@@ -13,6 +14,7 @@ const CreateEvent: React.FC = () => {
     capacity: '10',
     price: '',
     description: '',
+    venueId: '',
     groupId: searchParams.get('groupId') ?? '',
   });
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,13 @@ const CreateEvent: React.FC = () => {
       .get('/groups')
       .then((res) => setGroups(res.data.filter((group: any) => group.isMember)))
       .catch(() => setGroups([]));
+
+    // PA-03 : catalogue des complexes. Le champ lieu reste libre a cote —
+    // tous les five ne se jouent pas dans un complexe reference.
+    api
+      .get('/venues')
+      .then((res) => setVenues(res.data))
+      .catch(() => setVenues([]));
   }, []);
 
   const handleChange = (
@@ -54,6 +63,7 @@ const CreateEvent: React.FC = () => {
       if (formData.description) payload.description = formData.description;
       if (formData.price) payload.price = Number(formData.price);
       if (formData.groupId) payload.groupId = formData.groupId;
+      if (formData.venueId) payload.venueId = formData.venueId;
 
       const response = await api.post('/events', payload);
       navigate(`/sessions/${response.data.id}`, { replace: true });
@@ -103,6 +113,24 @@ const CreateEvent: React.FC = () => {
             placeholder="Le Five Reims"
           />
         </Field>
+
+        {venues.length > 0 && (
+          <Field label="Complexe" name="venueId" hint="Facultatif. Laissez vide pour un lieu libre.">
+            <select
+              id="venueId" name="venueId"
+              value={formData.venueId} onChange={handleChange}
+              className={inputClass} disabled={loading}
+            >
+              <option value="">Aucun</option>
+              {venues.map((venue) => (
+                <option key={venue.id} value={venue.id}>
+                  {venue.name}
+                  {venue.city ? ` — ${venue.city}` : ''}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
 
         <Field label="Nombre de places" name="capacity" hint="Au-delà, les joueurs passent en liste d'attente.">
           <input

@@ -1,16 +1,25 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import api, { currentUser } from '../services/api';
 import ShareButton from '../components/ShareButton';
 import {
   Alert,
   Button,
   Card,
+  Field,
   formatDateTime,
+  inputClass,
   Loading,
   PageTitle,
   StatusBadge,
 } from '../components/ui';
+
+/** Valeur attendue par <input type="datetime-local">, en heure locale. */
+const toLocalInput = (iso: string) => {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 /**
  * Parcours critique « s'inscrire a une session » (E-03).
@@ -36,7 +45,10 @@ const EventDetail: React.FC = () => {
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [duplicateDate, setDuplicateDate] = useState('');
   const me = currentUser();
+  const navigate = useNavigate();
 
   const load = useCallback(async () => {
     try {
@@ -123,6 +135,91 @@ const EventDetail: React.FC = () => {
         setError(err.response?.data?.message ?? 'Relance impossible');
       }
     } finally {
+      setActing(false);
+    }
+  };
+
+  /** E-02 : transitions pilotees par l'organisateur. */
+  const setStatus = async (status: string, confirmMessage?: string) => {
+    if (confirmMessage && !window.confirm(confirmMessage)) return;
+
+    setActing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.patch(`/events/${eventId}/status`, { status });
+      await load();
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? 'Changement de statut impossible');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  /**
+   * E-04 : recurrence par duplication.
+   *
+   * La copie nait en brouillon et sans inscription : c'est la validation
+   * humaine qu'exige le CCH.md, et reconduire les inscrits reviendrait a les
+   * engager sans leur demander.
+   */
+  const duplicate = async () => {
+    if (!duplicateDate) return;
+
+    setActing(true);
+    setError(null);
+    try {
+      const response = await api.post(`/events/${eventId}/duplicate`, {
+        dateTime: new Date(duplicateDate).toISOString(),
+      });
+      navigate(`/sessions/${response.data.id}`);
+    } catch (err: any) {
+      const data = err.response?.data;
+      setError(data?.details?.[0] ?? data?.message ?? 'Duplication impossible');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const saveEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActing(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const payload: Record<string, unknown> = {
+        title: event.title,
+        dateTime: new Date(event.dateTime).toISOString(),
+        capacity: Number(event.capacity),
+      };
+      if (event.location) payload.location = event.location;
+      if (event.description) payload.description = event.description;
+      if (event.price != null && event.price !== '') payload.price = Number(event.price);
+      if (event.groupId) payload.groupId = event.groupId;
+      if (event.venueId) payload.venueId = event.venueId;
+
+      await api.put(`/events/${eventId}`, payload);
+      setEditing(false);
+      await load();
+      setNotice('Session mise à jour.');
+    } catch (err: any) {
+      const data = err.response?.data;
+      setError(data?.details?.[0] ?? data?.message ?? 'Enregistrement impossible');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const removeEvent = async () => {
+    if (!window.confirm('Supprimer cette session ? Les inscriptions seront perdues.')) return;
+
+    setActing(true);
+    try {
+      await api.delete(`/events/${eventId}`);
+      navigate('/dashboard', { replace: true });
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? 'Suppression impossible');
       setActing(false);
     }
   };
@@ -281,17 +378,120 @@ const EventDetail: React.FC = () => {
         </section>
       )}
 
-      {isOrganizer && !closed && (
-        <div className="space-y-3">
-          {event.groupId && (
-            <Button variant="secondary" onClick={remind} disabled={acting} full>
-              Relancer les non-répondants
-            </Button>
+      {isOrganizer && (
+        <Card className="mt-6">
+          <h2 className="font-semibold text-gray-900 mb-3">Organisation</h2>
+
+          {editing ? (
+            <form onSubmit={saveEvent} className="space-y-3">
+              <Field label="Titre" name="editTitle">
+                <input
+                  id="editTitle" className={inputClass} required
+                  value={event.title}
+                  onChange={(e) => setEvent((v: any) => ({ ...v, title: e.target.value }))}
+                />
+              </Field>
+
+              <Field label="Date et heure" name="editDateTime">
+                <input
+                  id="editDateTime" type="datetime-local" className={inputClass} required
+                  value={toLocalInput(event.dateTime)}
+                  onChange={(e) => setEvent((v: any) => ({ ...v, dateTime: e.target.value }))}
+                />
+              </Field>
+
+              <Field label="Lieu" name="editLocation">
+                <input
+                  id="editLocation" className={inputClass}
+                  value={event.location ?? ''}
+                  onChange={(e) => setEvent((v: any) => ({ ...v, location: e.target.value }))}
+                />
+              </Field>
+
+              <Field label="Nombre de places" name="editCapacity">
+                <input
+                  id="editCapacity" type="number" min={1} max={50} className={inputClass} required
+                  value={event.capacity}
+                  onChange={(e) => setEvent((v: any) => ({ ...v, capacity: e.target.value }))}
+                />
+              </Field>
+
+              <div className="flex gap-2">
+                <Button type="submit" disabled={acting} full>
+                  Enregistrer
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setEditing(false)} full>
+                  Annuler
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              {!closed && (
+                <Button type="button" variant="secondary" onClick={() => setEditing(true)} full>
+                  Modifier la session
+                </Button>
+              )}
+
+              {/* E-02 : un brouillon n'est pas encore partageable. */}
+              {event.status === 'draft' && (
+                <Button type="button" onClick={() => setStatus('open')} disabled={acting} full>
+                  Ouvrir aux inscriptions
+                </Button>
+              )}
+
+              {(event.status === 'open' || event.status === 'full') && (
+                <Button
+                  type="button" variant="secondary" disabled={acting}
+                  onClick={() => setStatus('completed', 'Marquer cette session comme terminée ?')}
+                  full
+                >
+                  Marquer comme terminée
+                </Button>
+              )}
+
+              {event.groupId && !closed && (
+                <Button type="button" variant="secondary" onClick={remind} disabled={acting} full>
+                  Relancer les non-répondants
+                </Button>
+              )}
+
+              {/* E-04 : recurrence, declenchee par l'organisateur. */}
+              <div className="pt-3 border-t border-gray-100">
+                <Field
+                  label="Dupliquer pour une autre date"
+                  name="duplicateDate"
+                  hint="La copie est créée en brouillon, sans les inscrits."
+                >
+                  <input
+                    id="duplicateDate" type="datetime-local" className={inputClass}
+                    value={duplicateDate}
+                    onChange={(e) => setDuplicateDate(e.target.value)}
+                  />
+                </Field>
+                <div className="mt-2">
+                  <Button
+                    type="button" variant="secondary" onClick={duplicate}
+                    disabled={acting || !duplicateDate} full
+                  >
+                    Dupliquer la session
+                  </Button>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-gray-100 space-y-3">
+                {!closed && (
+                  <Button type="button" variant="danger" onClick={cancelEvent} disabled={acting} full>
+                    Annuler la session
+                  </Button>
+                )}
+                <Button type="button" variant="danger" onClick={removeEvent} disabled={acting} full>
+                  Supprimer la session
+                </Button>
+              </div>
+            </div>
           )}
-          <Button variant="danger" onClick={cancelEvent} disabled={acting} full>
-            Annuler la session
-          </Button>
-        </div>
+        </Card>
       )}
     </div>
   );
