@@ -98,6 +98,35 @@ const EventDetail: React.FC = () => {
     }
   };
 
+  /**
+   * N-03 : relancer les membres du groupe qui n'ont pas repondu.
+   *
+   * Le plafond quotidien renvoie 429. Ce n'est pas une panne mais une regle
+   * du produit : on l'affiche comme une information, pas comme une erreur.
+   */
+  const remind = async () => {
+    setActing(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const response = await api.post(`/events/${eventId}/remind`);
+      setNotice(
+        response.data.recipientCount > 0
+          ? `Relance envoyée à ${response.data.recipientCount} joueur${response.data.recipientCount > 1 ? 's' : ''}.`
+          : 'Tout le monde a déjà répondu.'
+      );
+    } catch (err: any) {
+      if (err.response?.status === 429) {
+        setNotice('Une relance a déjà été envoyée aujourd\'hui pour cette session.');
+      } else {
+        setError(err.response?.data?.message ?? 'Relance impossible');
+      }
+    } finally {
+      setActing(false);
+    }
+  };
+
   const cancelEvent = async () => {
     if (!window.confirm('Annuler cette session ? Les inscrits seront prévenus.')) return;
 
@@ -253,9 +282,16 @@ const EventDetail: React.FC = () => {
       )}
 
       {isOrganizer && !closed && (
-        <Button variant="danger" onClick={cancelEvent} disabled={acting} full>
-          Annuler la session
-        </Button>
+        <div className="space-y-3">
+          {event.groupId && (
+            <Button variant="secondary" onClick={remind} disabled={acting} full>
+              Relancer les non-répondants
+            </Button>
+          )}
+          <Button variant="danger" onClick={cancelEvent} disabled={acting} full>
+            Annuler la session
+          </Button>
+        </div>
       )}
     </div>
   );

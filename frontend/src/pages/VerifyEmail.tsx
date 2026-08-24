@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { Alert, Card, Loading, PageTitle } from '../components/ui';
@@ -14,7 +14,15 @@ const VerifyEmail: React.FC = () => {
   const [state, setState] = useState<'pending' | 'ok' | 'error'>('pending');
   const [message, setMessage] = useState('');
 
+  // Le jeton est consomme a la premiere validation. Sans ce garde, le double
+  // appel des effets en mode strict envoie une seconde requete sur un jeton
+  // deja consomme, dont le 404 ecrase le succes affiche.
+  const sent = useRef(false);
+
   useEffect(() => {
+    if (sent.current) return;
+    sent.current = true;
+
     api
       .post(`/auth/verify-email/${token}`)
       .then(() => setState('ok'))

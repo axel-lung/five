@@ -14,6 +14,8 @@ import SharedEvent from './pages/SharedEvent';
 import Profile from './pages/Profile';
 import ProfileData from './pages/ProfileData';
 import VerifyEmail from './pages/VerifyEmail';
+import Notifications from './pages/Notifications';
+import NotificationPreferences from './pages/NotificationPreferences';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import PublicLayout from './components/PublicLayout';
@@ -41,6 +43,8 @@ function App() {
             <Route path="/groupes/:groupId" element={<GroupDetail />} />
             <Route path="/sessions/nouvelle" element={<CreateEvent />} />
             <Route path="/sessions/:eventId" element={<EventDetail />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/notifications/preferences" element={<NotificationPreferences />} />
             <Route path="/profil" element={<Profile />} />
             <Route path="/profil/donnees" element={<ProfileData />} />
           </Route>

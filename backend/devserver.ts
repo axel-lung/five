@@ -14,6 +14,10 @@ const EmbeddedPostgres = require('embedded-postgres').default;
  * Docker n'est pas disponible. La base est ephemere : elle est recreee a
  * chaque demarrage, migrations comprises. Ne remplace pas docker-compose,
  * qui reste la reference pour un environnement proche de la production.
+ *
+ * En conteneur, lance en root : embedded-postgres redescend alors sur
+ * l'utilisateur `postgres`, qui doit pouvoir ecrire dans ce repertoire
+ * (`chmod 777 backend`). En utilisateur normal, le cas ne se pose pas.
  */
 const DATA_DIR = path.join(__dirname, '.pg-dev');
 const DB_PORT = 55440;

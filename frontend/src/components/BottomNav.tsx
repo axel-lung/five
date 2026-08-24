@@ -60,12 +60,13 @@ export const BottomNav: React.FC<{ unread?: number; isAdmin?: boolean }> = ({
   return (
     <nav
       className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200
-                 sm:static sm:bg-transparent sm:border-0"
+                 sm:static sm:bg-gray-800 sm:border-0"
       aria-label="Navigation principale"
     >
       {/* pb-[env(safe-area-inset-bottom)] : evite que la barre passe sous
           l'indicateur d'accueil des iPhone sans bouton. */}
-      <div className="flex sm:gap-1 pb-[env(safe-area-inset-bottom)] sm:pb-0">
+      <div className="flex sm:gap-1 sm:max-w-4xl sm:mx-auto sm:px-4 sm:py-1
+                      pb-[env(safe-area-inset-bottom)] sm:pb-1">
         {tabs.map((tab) => (
           <Item key={tab.to} tab={tab} />
         ))}
