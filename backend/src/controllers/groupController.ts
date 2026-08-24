@@ -291,9 +291,30 @@ export const getGroupMembers = async (req: Request, res: Response, next: NextFun
       return res.status(404).json({ message: 'Group not found' });
     }
 
+    // G-05 : recherche sur le prenom ou le nom. Le filtre porte sur la table
+    // jointe, d'ou `required: true` : sans lui, Sequelize ferait un LEFT JOIN
+    // et renverrait les membres non correspondants avec un `user` a null.
+    const q = (req.query.q as string)?.trim();
+    const userWhere = q
+      ? {
+          [Op.or]: [
+            { firstName: { [Op.iLike]: `%${q}%` } },
+            { lastName: { [Op.iLike]: `%${q}%` } },
+          ],
+        }
+      : undefined;
+
     const members = await GroupMember.findAll({
       where: { groupId: group.id },
-      include: [{ model: User, as: 'user', attributes: PUBLIC_USER_ATTRIBUTES }]
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: PUBLIC_USER_ATTRIBUTES,
+          where: userWhere,
+          required: Boolean(userWhere),
+        },
+      ],
     });
 
     res.json(members);

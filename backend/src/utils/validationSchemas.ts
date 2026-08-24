@@ -31,7 +31,11 @@ export const updateProfileSchema = Joi.object({
   bio: Joi.string().max(500).optional(),
   city: Joi.string().max(100).optional(),
   preferredPosition: Joi.string().max(50).optional(),
-  selfDeclaredLevel: Joi.number().min(1).min(1).max(5).optional(),
+  selfDeclaredLevel: Joi.number().min(1).max(5).optional(),
+  // C-03 : disponibilites. Les creneaux sont des etiquettes libres cote V1,
+  // le client propose la liste ; le rayon est en kilometres.
+  preferredSlots: Joi.array().items(Joi.string().max(50)).max(20).optional(),
+  travelRadiusKm: Joi.number().integer().min(0).max(200).allow(null).optional(),
 });
 
 // Create group validation schema

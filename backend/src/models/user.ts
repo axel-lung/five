@@ -21,6 +21,8 @@ export interface UserAttributes {
   emailVerificationToken?: string | null;
   emailVerificationSentAt?: Date | null;
   role?: 'user' | 'admin';
+  preferredSlots?: string[];
+  travelRadiusKm?: number | null;
   suspendedAt?: Date | null;
   suspensionReason?: string | null;
   createdAt?: Date;
@@ -54,6 +56,8 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
   public emailVerificationToken?: string | null;
   public emailVerificationSentAt?: Date | null;
   public role?: 'user' | 'admin';
+  public preferredSlots?: string[];
+  public travelRadiusKm?: number | null;
   public suspendedAt?: Date | null;
   public suspensionReason?: string | null;
   public createdAt?: Date;
@@ -152,6 +156,16 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
         },
         suspensionReason: {
           type: DataTypes.STRING(255),
+          allowNull: true,
+        },
+        // C-03 : creneaux preferes, ex. ['mardi-soir', 'jeudi-soir'].
+        preferredSlots: {
+          type: DataTypes.JSONB,
+          allowNull: false,
+          defaultValue: [],
+        },
+        travelRadiusKm: {
+          type: DataTypes.INTEGER,
           allowNull: true,
         },
       },

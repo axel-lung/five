@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getUserProfile, updateUserProfile } from '../controllers/userController';
-import { deleteAccount, exportAccount } from '../controllers/accountController';
+import { deleteAccount, exportAccount, getPublicProfile } from '../controllers/accountController';
 import { blockUser, unblockUser, listBlocks } from '../controllers/moderationController';
 import { validateRequest } from '../middleware/validateRequest';
 import { authenticateToken } from '../middleware/auth';
@@ -25,5 +25,9 @@ router.delete('/me', deleteAccount);
 router.get('/me/blocks', listBlocks);
 router.post('/:id/block', blockUser);
 router.delete('/:id/block', unblockUser);
+
+// D-02 : profil public. En DERNIER : '/:id' capturerait sinon '/profile' et
+// '/me/export', declares plus haut.
+router.get('/:id', getPublicProfile);
 
 export default router;

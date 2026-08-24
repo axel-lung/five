@@ -10,6 +10,8 @@ import {
 } from '../models';
 import { cancelInscription } from '../services/inscriptions';
 import { notify, notifyMany } from '../services/notifications';
+import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
+import { isBlockedBetween } from './moderationController';
 
 /**
  * C-06 : effacement du compte.
@@ -206,6 +208,43 @@ export const exportAccount = async (req: Request, res: Response, next: NextFunct
         event: i.event,
       })),
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * D-02 : profil public minimal d'un autre joueur.
+ *
+ * Ne renvoie que PUBLIC_USER_ATTRIBUTES — la meme allow-list que les listes
+ * de membres, pour qu'un champ ajoute plus tard reste prive par defaut. Les
+ * disponibilites (C-03) en sont volontairement absentes : elles servent la
+ * recommandation locale (D-04, V2) et n'ont pas a etre publiques avant.
+ */
+export const getPublicProfile = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const viewerId = (req as any).user.id;
+    const targetId = req.params.id;
+
+    const user = await User.findByPk(targetId, { attributes: PUBLIC_USER_ATTRIBUTES });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Un compte efface ou suspendu n'a plus de profil consultable. Le champ
+    // n'etant pas dans l'allow-list, on le relit separement.
+    const state = await User.findByPk(targetId, { attributes: ['deletedAt', 'suspendedAt'] });
+    if (state?.deletedAt || state?.suspendedAt) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // D-06 : un blocage rend les deux profils mutuellement invisibles.
+    if (viewerId !== targetId && (await isBlockedBetween(viewerId, targetId))) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json(user);
   } catch (error) {
     next(error);
   }
