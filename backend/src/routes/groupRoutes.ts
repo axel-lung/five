@@ -20,6 +20,7 @@ import {
 import { authenticateToken } from '../middleware/auth';
 import { validateRequest } from '../middleware/validateRequest';
 import { createGroupSchema, createInvitationSchema } from '../utils/validationSchemas';
+import { createLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
@@ -49,7 +50,7 @@ router.get('/:id/members', getGroupMembers);
 router.post('/:id/leave', leaveGroup);
 
 // Invitations rattachees a un groupe
-router.post('/:id/invitations', validateRequest(createInvitationSchema), createInvitation);
+router.post('/:id/invitations', createLimiter, validateRequest(createInvitationSchema), createInvitation);
 router.get('/:id/invitations', listInvitations);
 
 export default router;

@@ -7,6 +7,8 @@ import userRoutes from './routes/userRoutes';
 import groupRoutes from './routes/groupRoutes';
 import eventRoutes from './routes/eventRoutes';
 import authRoutes from './routes/authRoutes';
+import reportRoutes from './routes/reportRoutes';
+import { authLimiter } from './middleware/rateLimit';
 
 /**
  * L'application Express, sans ecoute reseau ni connexion base.
@@ -26,10 +28,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/api/auth', authRoutes);
+// S-05 : la limite de debit se pose AVANT le routeur, pour couvrir login,
+// register et refresh d'un seul tenant.
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {

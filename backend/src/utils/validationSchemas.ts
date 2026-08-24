@@ -71,3 +71,10 @@ export const createInvitationSchema = Joi.object({
 // Le middleware de validation vit dans middleware/validateRequest.ts.
 // Il en existait une seconde copie ici, chaque fichier important l'une ou
 // l'autre au hasard.
+// S-05 : signalement d'un compte, d'un groupe ou d'un evenement.
+export const createReportSchema = Joi.object({
+  targetType: Joi.string().valid('user', 'group', 'event').required(),
+  targetId: Joi.string().uuid().required(),
+  reason: Joi.string().max(100).required(),
+  details: Joi.string().max(1000).optional(),
+});

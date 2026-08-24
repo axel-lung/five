@@ -1,6 +1,8 @@
 import { sequelize } from '../src/models';
 
 const TABLES = [
+  'reports',
+  'user_blocks',
   'event_inscriptions',
   'events',
   'group_invitations',

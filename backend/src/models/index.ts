@@ -6,6 +6,8 @@ import { Event } from './event';
 import { EventInscription } from './eventInscription';
 import { GroupMember } from './groupMember';
 import { GroupInvitation } from './groupInvitation';
+import { UserBlock } from './userBlock';
+import { Report } from './report';
 
 // Initialize Sequelize connection
 export const sequelize = new Sequelize(env.databaseUrl, {
@@ -25,6 +27,8 @@ export const EventModel = Event.initModel(sequelize);
 export const EventInscriptionModel = EventInscription.initModel(sequelize);
 export const GroupMemberModel = GroupMember.initModel(sequelize);
 export const GroupInvitationModel = GroupInvitation.initModel(sequelize);
+export const UserBlockModel = UserBlock.initModel(sequelize);
+export const ReportModel = Report.initModel(sequelize);
 
 // Set up associations
 User.associate = ({ Group, Event, EventInscription, GroupMember }) => {
@@ -94,5 +98,7 @@ Event.associate({ User: UserModel, Group: GroupModel, EventInscription: EventIns
 EventInscription.associate({ Event: EventModel, User: UserModel });
 GroupMember.associate({ Group: GroupModel, User: UserModel });
 GroupInvitation.associate({ Group: GroupModel, User: UserModel });
+UserBlock.associate({ UserModel });
+Report.associate({ UserModel });
 
 export { sequelize as default };

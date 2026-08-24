@@ -14,6 +14,7 @@ import {
 import { authenticateToken } from '../middleware/auth';
 import { validateRequest } from '../middleware/validateRequest';
 import { createEventSchema, updateEventStatusSchema } from '../utils/validationSchemas';
+import { createLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
@@ -25,7 +26,7 @@ router.get('/shared/:token', getSharedEvent);
 router.use(authenticateToken);
 
 // Event management routes
-router.post('/', validateRequest(createEventSchema), createEvent);
+router.post('/', createLimiter, validateRequest(createEventSchema), createEvent);
 router.get('/', getEvents);
 router.get('/:id', getEventById);
 router.put('/:id', validateRequest(createEventSchema), updateEvent);

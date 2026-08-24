@@ -6,6 +6,7 @@ import {
   UserModel as User,
   sequelize,
 } from '../models';
+import { isBlockedBetween } from './moderationController';
 
 const DEFAULT_TTL_DAYS = 7;
 
@@ -125,6 +126,13 @@ export const acceptInvitation = async (req: Request, res: Response, next: NextFu
       // renverrait sinon 404 a quelqu'un qui est deja membre.
       if (existing) {
         return { groupId: invitation.groupId, alreadyMember: true };
+      }
+
+      // D-06 : un lien d'invitation circule librement ; le blocage doit
+      // s'appliquer a l'acceptation, seul moment ou l'on connait l'arrivant.
+      // Meme reponse qu'un lien invalide, pour ne rien reveler du blocage.
+      if (await isBlockedBetween(userId, invitation.createdBy, t)) {
+        return { error: { code: 404, message: 'Invitation not found or no longer valid' } };
       }
 
       if (!invitation.isUsable()) {

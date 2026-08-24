@@ -11,6 +11,7 @@ import { Op } from 'sequelize';
 import { createEventSchema } from '../utils/validationSchemas';
 import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
 import { cancelInscription, syncCapacityStatus } from '../services/inscriptions';
+import { isBlockedBetween } from './moderationController';
 
 /**
  * G-06 / C-04 : un evenement rattache a un groupe prive ne regarde que ses
@@ -290,6 +291,14 @@ export const joinEvent = async (req: Request, res: Response, next: NextFunction)
 
       if (event.status !== 'open' && event.status !== 'full') {
         return { error: { code: 400, message: 'Event is not open for registration' } };
+      }
+
+      // D-06 : verifie DANS la transaction, pour voir le meme etat que
+      // l'inscription qui suit. 404 plutot que 403 : l'organisateur n'a pas a
+      // apprendre qu'il a ete bloque, ni le joueur a se voir confirmer qu'il
+      // l'est.
+      if (await isBlockedBetween(userId, event.organizerId, t)) {
+        return { error: { code: 404, message: 'Event not found' } };
       }
 
       const existing = await EventInscription.findOne({

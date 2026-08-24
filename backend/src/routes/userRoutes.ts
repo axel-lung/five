@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getUserProfile, updateUserProfile } from '../controllers/userController';
 import { deleteAccount, exportAccount } from '../controllers/accountController';
+import { blockUser, unblockUser, listBlocks } from '../controllers/moderationController';
 import { validateRequest } from '../middleware/validateRequest';
 import { authenticateToken } from '../middleware/auth';
 import { updateProfileSchema } from '../utils/validationSchemas';
@@ -18,5 +19,11 @@ router.put('/profile', validateRequest(updateProfileSchema), updateUserProfile);
 // ne concernent jamais qu'un compte, celui de l'appelant.
 router.get('/me/export', exportAccount);
 router.delete('/me', deleteAccount);
+
+// D-06 : blocage. `/me/blocks` avant `/:id/block` n'a pas d'ambiguite ici,
+// les deux motifs ne se recouvrent pas.
+router.get('/me/blocks', listBlocks);
+router.post('/:id/block', blockUser);
+router.delete('/:id/block', unblockUser);
 
 export default router;
