@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import api, { currentUser } from '../services/api';
 import ShareButton from '../components/ShareButton';
+import ReportDialog from '../components/ReportDialog';
 import {
   Alert,
   Button,
@@ -104,7 +105,13 @@ const EventDetail: React.FC = () => {
 
       await load();
     } catch (err: any) {
-      setError(err.response?.data?.message ?? 'Action impossible');
+      // L'API repond 404 quand un blocage existe, pour ne pas le reveler.
+      // On garde ce silence tout en restant lisible en francais.
+      setError(
+        err.response?.status === 404
+          ? "Cette session n'est plus disponible."
+          : (err.response?.data?.message ?? 'Action impossible')
+      );
     } finally {
       setActing(false);
     }
@@ -352,7 +359,9 @@ const EventDetail: React.FC = () => {
             <ul className="divide-y divide-gray-100">
               {confirmed.map((player) => (
                 <li key={player.id} className="py-2 text-sm text-gray-800">
-                  {displayName(player)}
+                  <Link to={`/joueurs/${player.id}`} className="hover:underline">
+                    {displayName(player)}
+                  </Link>
                   {player.id === me?.id && <span className="text-gray-400"> — vous</span>}
                 </li>
               ))}
@@ -376,6 +385,12 @@ const EventDetail: React.FC = () => {
             </ol>
           </Card>
         </section>
+      )}
+
+      {!isOrganizer && (
+        <div className="mt-6">
+          <ReportDialog targetType="event" targetId={eventId!} label="Signaler cette session" />
+        </div>
       )}
 
       {isOrganizer && (

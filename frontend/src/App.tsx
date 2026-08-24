@@ -16,6 +16,8 @@ import ProfileData from './pages/ProfileData';
 import VerifyEmail from './pages/VerifyEmail';
 import Notifications from './pages/Notifications';
 import NotificationPreferences from './pages/NotificationPreferences';
+import PlayerProfile from './pages/PlayerProfile';
+import Blocks from './pages/Blocks';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import PublicLayout from './components/PublicLayout';
@@ -47,6 +49,8 @@ function App() {
             <Route path="/notifications/preferences" element={<NotificationPreferences />} />
             <Route path="/profil" element={<Profile />} />
             <Route path="/profil/donnees" element={<ProfileData />} />
+            <Route path="/profil/blocages" element={<Blocks />} />
+            <Route path="/joueurs/:userId" element={<PlayerProfile />} />
           </Route>
         </Route>
       </Routes>

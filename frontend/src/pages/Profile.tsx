@@ -234,7 +234,10 @@ const Profile: React.FC = () => {
         </Button>
       </form>
 
-      <div className="mt-8 pt-6 border-t border-gray-200">
+      <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col gap-3">
+        <Link to="/profil/blocages" className="text-sm text-gray-600 underline">
+          Joueurs bloqués
+        </Link>
         <Link to="/profil/donnees" className="text-sm text-gray-600 underline">
           Mes données et mon compte
         </Link>

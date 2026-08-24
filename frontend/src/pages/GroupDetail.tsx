@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import api, { currentUser } from '../services/api';
 import ShareButton from '../components/ShareButton';
 import AvatarUpload, { mediaSrc } from '../components/AvatarUpload';
+import ReportDialog from '../components/ReportDialog';
 import {
   Alert,
   Button,
@@ -412,6 +413,12 @@ const GroupDetail: React.FC = () => {
               Supprimer le groupe
             </Button>
           )}
+        </div>
+      )}
+
+      {!canAdmin && (
+        <div className="mt-4">
+          <ReportDialog targetType="group" targetId={group.id} label="Signaler ce groupe" />
         </div>
       )}
     </div>
