@@ -98,3 +98,13 @@ export const updateMemberRoleSchema = Joi.object({
 export const transferOwnershipSchema = Joi.object({
   newOwnerId: Joi.string().uuid().required(),
 });
+
+// B-02 : moderation.
+export const suspendUserSchema = Joi.object({
+  reason: Joi.string().max(255).required(),
+});
+
+export const updateReportSchema = Joi.object({
+  status: Joi.string().valid('open', 'reviewing', 'resolved', 'dismissed').required(),
+  resolutionNote: Joi.string().max(1000).optional(),
+});

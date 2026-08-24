@@ -11,6 +11,7 @@ import { Report } from './report';
 import { Notification } from './notification';
 import { NotificationPreference } from './notificationPreference';
 import { EventReminder } from './eventReminder';
+import { AuditLog } from './auditLog';
 
 // Initialize Sequelize connection
 export const sequelize = new Sequelize(env.databaseUrl, {
@@ -35,6 +36,7 @@ export const ReportModel = Report.initModel(sequelize);
 export const NotificationModel = Notification.initModel(sequelize);
 export const NotificationPreferenceModel = NotificationPreference.initModel(sequelize);
 export const EventReminderModel = EventReminder.initModel(sequelize);
+export const AuditLogModel = AuditLog.initModel(sequelize);
 
 // Set up associations
 User.associate = ({ Group, Event, EventInscription, GroupMember }) => {
@@ -109,5 +111,6 @@ Report.associate({ UserModel });
 Notification.associate({ UserModel });
 NotificationPreference.associate({ UserModel });
 EventReminder.associate({ EventModel, UserModel });
+AuditLog.associate({ UserModel });
 
 export { sequelize as default };

@@ -83,6 +83,16 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    // B-02 : un compte suspendu garde son mot de passe valide, mais la
+    // suspension doit lui etre annoncee — contrairement a l'effacement, elle
+    // est reversible et il doit savoir a qui s'adresser.
+    if (user.suspendedAt) {
+      return res.status(403).json({
+        message: 'Account suspended',
+        reason: user.suspensionReason,
+      });
+    }
+
     // Generate JWT tokens
     const accessToken = generateAccessToken({
       id: user.id,
@@ -139,7 +149,7 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     // tokens deja emis restent valides jusqu'a expiration (1 h par defaut) :
     // authenticateToken ne touche pas la base, par choix de performance.
     const user = await UserModel.findByPk(payload.id);
-    if (!user || user.deletedAt) {
+    if (!user || user.deletedAt || user.suspendedAt) {
       return res.status(401).json({ message: 'Invalid or expired refresh token' });
     }
 

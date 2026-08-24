@@ -20,6 +20,9 @@ export interface UserAttributes {
   consentMarketingAt?: Date | null;
   emailVerificationToken?: string | null;
   emailVerificationSentAt?: Date | null;
+  role?: 'user' | 'admin';
+  suspendedAt?: Date | null;
+  suspensionReason?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -50,6 +53,9 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
   public consentMarketingAt?: Date | null;
   public emailVerificationToken?: string | null;
   public emailVerificationSentAt?: Date | null;
+  public role?: 'user' | 'admin';
+  public suspendedAt?: Date | null;
+  public suspensionReason?: string | null;
   public createdAt?: Date;
   public updatedAt?: Date;
 
@@ -132,6 +138,20 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
         },
         emailVerificationSentAt: {
           type: DataTypes.DATE,
+          allowNull: true,
+        },
+        // B-01 : aucune route n'ecrit ce champ, par choix. Voir migration 0006.
+        role: {
+          type: DataTypes.ENUM('user', 'admin'),
+          allowNull: false,
+          defaultValue: 'user',
+        },
+        suspendedAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+        },
+        suspensionReason: {
+          type: DataTypes.STRING(255),
           allowNull: true,
         },
       },

@@ -8,12 +8,14 @@ interface ReportAttributes {
   reason: string;
   details?: string | null;
   status: 'open' | 'reviewing' | 'resolved' | 'dismissed';
+  resolvedBy?: string | null;
+  resolutionNote?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 interface ReportCreationAttributes extends Optional<ReportAttributes,
-  'id' | 'details' | 'status' | 'createdAt' | 'updatedAt'> {}
+  'id' | 'details' | 'status' | 'resolvedBy' | 'resolutionNote' | 'createdAt' | 'updatedAt'> {}
 
 export class Report extends Model<ReportAttributes, ReportCreationAttributes>
   implements ReportAttributes {
@@ -24,6 +26,8 @@ export class Report extends Model<ReportAttributes, ReportCreationAttributes>
   public reason!: string;
   public details?: string | null;
   public status!: 'open' | 'reviewing' | 'resolved' | 'dismissed';
+  public resolvedBy?: string | null;
+  public resolutionNote?: string | null;
   public createdAt?: Date;
   public updatedAt?: Date;
 
@@ -61,6 +65,15 @@ export class Report extends Model<ReportAttributes, ReportCreationAttributes>
           allowNull: false,
           defaultValue: 'open',
         },
+        resolvedBy: {
+          type: DataTypes.UUID,
+          allowNull: true,
+          references: { model: 'users', key: 'id' },
+        },
+        resolutionNote: {
+          type: DataTypes.TEXT,
+          allowNull: true,
+        },
       },
       {
         sequelize,
@@ -72,5 +85,6 @@ export class Report extends Model<ReportAttributes, ReportCreationAttributes>
 
   public static associate = ({ UserModel }: any) => {
     this.belongsTo(UserModel, { foreignKey: 'reporterId', as: 'reporter' });
+    this.belongsTo(UserModel, { foreignKey: 'resolvedBy', as: 'resolver' });
   };
 }
