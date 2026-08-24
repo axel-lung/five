@@ -18,6 +18,12 @@ import Notifications from './pages/Notifications';
 import NotificationPreferences from './pages/NotificationPreferences';
 import PlayerProfile from './pages/PlayerProfile';
 import Blocks from './pages/Blocks';
+import AdminRoute from './components/AdminRoute';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminReports from './pages/admin/AdminReports';
+import AdminAccounts from './pages/admin/AdminAccounts';
+import AdminAudit from './pages/admin/AdminAudit';
+import AdminVenues from './pages/admin/AdminVenues';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import PublicLayout from './components/PublicLayout';
@@ -51,6 +57,16 @@ function App() {
             <Route path="/profil/donnees" element={<ProfileData />} />
             <Route path="/profil/blocages" element={<Blocks />} />
             <Route path="/joueurs/:userId" element={<PlayerProfile />} />
+
+            {/* B-01 : ce garde ne fait que masquer. La vraie protection est
+                requireAdmin cote serveur, qui relit le role en base. */}
+            <Route element={<AdminRoute />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/signalements" element={<AdminReports />} />
+              <Route path="/admin/comptes" element={<AdminAccounts />} />
+              <Route path="/admin/journal" element={<AdminAudit />} />
+              <Route path="/admin/complexes" element={<AdminVenues />} />
+            </Route>
           </Route>
         </Route>
       </Routes>
