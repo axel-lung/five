@@ -10,11 +10,16 @@ import {
   leaveEvent,
   getEventParticipants,
   getSharedEvent,
-  remindEvent
+  remindEvent,
+  duplicateEvent
 } from '../controllers/eventController';
 import { authenticateToken } from '../middleware/auth';
 import { validateRequest } from '../middleware/validateRequest';
-import { createEventSchema, updateEventStatusSchema } from '../utils/validationSchemas';
+import {
+  createEventSchema,
+  updateEventStatusSchema,
+  duplicateEventSchema,
+} from '../utils/validationSchemas';
 import { createLimiter } from '../middleware/rateLimit';
 
 const router = Router();
@@ -41,5 +46,8 @@ router.get('/:id/participants', getEventParticipants);
 
 // N-03 : relance des non-repondants, plafonnee cote controleur.
 router.post('/:id/remind', remindEvent);
+
+// E-04 : recurrence par duplication, declenchee par l'organisateur.
+router.post('/:id/duplicate', createLimiter, validateRequest(duplicateEventSchema), duplicateEvent);
 
 export default router;

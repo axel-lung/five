@@ -57,6 +57,9 @@ export const createEventSchema = Joi.object({
   level: Joi.string().max(50).optional(),
   price: Joi.number().precision(2).min(0).optional(),
   groupId: Joi.string().uuid().optional(),
+  // PA-03 : rattachement a un complexe. Optionnel — tous les five ne se
+  // jouent pas dans un complexe reference.
+  venueId: Joi.string().uuid().allow(null).optional(),
 });
 
 // E-02 : transitions de statut pilotees par l'organisateur.
@@ -111,4 +114,18 @@ export const suspendUserSchema = Joi.object({
 export const updateReportSchema = Joi.object({
   status: Joi.string().valid('open', 'reviewing', 'resolved', 'dismissed').required(),
   resolutionNote: Joi.string().max(1000).optional(),
+});
+
+// PA-03 : catalogue des complexes, alimente par le back-office.
+export const createVenueSchema = Joi.object({
+  name: Joi.string().max(255).required(),
+  address: Joi.string().max(255).optional(),
+  city: Joi.string().max(100).optional(),
+  isPartner: Joi.boolean().default(false),
+});
+
+// E-04 : duplication d'un evenement recurrent. La date est obligatoire :
+// dupliquer sans la deplacer creerait un doublon a la meme heure.
+export const duplicateEventSchema = Joi.object({
+  dateTime: Joi.date().iso().required(),
 });

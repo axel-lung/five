@@ -12,6 +12,7 @@ import { Notification } from './notification';
 import { NotificationPreference } from './notificationPreference';
 import { EventReminder } from './eventReminder';
 import { AuditLog } from './auditLog';
+import { Venue } from './venue';
 
 // Initialize Sequelize connection
 export const sequelize = new Sequelize(env.databaseUrl, {
@@ -37,6 +38,7 @@ export const NotificationModel = Notification.initModel(sequelize);
 export const NotificationPreferenceModel = NotificationPreference.initModel(sequelize);
 export const EventReminderModel = EventReminder.initModel(sequelize);
 export const AuditLogModel = AuditLog.initModel(sequelize);
+export const VenueModel = Venue.initModel(sequelize);
 
 // Set up associations
 User.associate = ({ Group, Event, EventInscription, GroupMember }) => {
@@ -72,9 +74,10 @@ Group.associate = ({ User, Event, GroupMember }) => {
   Group.hasMany(Event, { foreignKey: 'groupId', as: 'events' });
 };
 
-Event.associate = ({ User, Group, EventInscription }) => {
+Event.associate = ({ User, Group, EventInscription, Venue }) => {
   Event.belongsTo(User, { foreignKey: 'organizerId', as: 'organizer' });
   Event.belongsTo(Group, { foreignKey: 'groupId', as: 'group' });
+  Event.belongsTo(Venue, { foreignKey: 'venueId', as: 'venue' });
   Event.hasMany(EventInscription, { foreignKey: 'eventId', as: 'inscriptions' });
   Event.belongsToMany(User, {
     through: EventInscription,
@@ -102,7 +105,7 @@ GroupInvitation.associate = ({ Group, User }) => {
 // Call associate methods after all models are defined
 User.associate({ Group: GroupModel, Event: EventModel, EventInscription: EventInscriptionModel, GroupMember: GroupMemberModel });
 Group.associate({ User: UserModel, Event: EventModel, GroupMember: GroupMemberModel });
-Event.associate({ User: UserModel, Group: GroupModel, EventInscription: EventInscriptionModel });
+Event.associate({ User: UserModel, Group: GroupModel, EventInscription: EventInscriptionModel, Venue: VenueModel });
 EventInscription.associate({ Event: EventModel, User: UserModel });
 GroupMember.associate({ Group: GroupModel, User: UserModel });
 GroupInvitation.associate({ Group: GroupModel, User: UserModel });
@@ -112,5 +115,6 @@ Notification.associate({ UserModel });
 NotificationPreference.associate({ UserModel });
 EventReminder.associate({ EventModel, UserModel });
 AuditLog.associate({ UserModel });
+Venue.associate({ EventModel });
 
 export { sequelize as default };

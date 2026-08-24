@@ -13,6 +13,7 @@ interface EventAttributes {
   status: 'draft' | 'open' | 'full' | 'completed' | 'cancelled';
   organizerId: string;
   groupId?: string;
+  venueId?: string | null;
   shareableLinkToken: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -20,7 +21,7 @@ interface EventAttributes {
 
 // Define the Event creation attributes
 interface EventCreationAttributes extends Optional<EventAttributes,
-  'id' | 'description' | 'location' | 'level' | 'price' | 'groupId' |
+  'id' | 'description' | 'location' | 'level' | 'price' | 'groupId' | 'venueId' |
   'shareableLinkToken' | 'createdAt' | 'updatedAt' | 'status'> {}
 
 // Define the Event model
@@ -37,6 +38,7 @@ export class Event extends Model<EventAttributes, EventCreationAttributes>
   public status!: 'draft' | 'open' | 'full' | 'completed' | 'cancelled';
   public organizerId!: string;
   public groupId?: string;
+  public venueId?: string | null;
   public shareableLinkToken!: string;
   public createdAt?: Date;
   public updatedAt?: Date;
@@ -99,6 +101,14 @@ export class Event extends Model<EventAttributes, EventCreationAttributes>
           allowNull: true,
           references: {
             model: 'groups',
+            key: 'id',
+          },
+        },
+        venueId: {
+          type: DataTypes.UUID,
+          allowNull: true,
+          references: {
+            model: 'venues',
             key: 'id',
           },
         },

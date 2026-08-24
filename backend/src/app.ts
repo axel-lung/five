@@ -10,6 +10,7 @@ import authRoutes from './routes/authRoutes';
 import reportRoutes from './routes/reportRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import adminRoutes from './routes/adminRoutes';
+import venueRoutes from './routes/venueRoutes';
 import { authLimiter } from './middleware/rateLimit';
 
 /**
@@ -39,6 +40,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/venues', venueRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {

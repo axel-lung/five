@@ -12,6 +12,7 @@ const TABLES = [
   'group_invitations',
   'group_members',
   'groups',
+  'venues',
   'users',
 ];
 

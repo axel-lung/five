@@ -12,7 +12,8 @@ import {
 import { authenticateToken } from '../middleware/auth';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { validateRequest } from '../middleware/validateRequest';
-import { suspendUserSchema, updateReportSchema } from '../utils/validationSchemas';
+import { createVenue, deactivateVenue } from '../controllers/venueController';
+import { suspendUserSchema, updateReportSchema, createVenueSchema } from '../utils/validationSchemas';
 
 const router = Router();
 
@@ -32,6 +33,11 @@ router.post('/users/:id/suspend', validateRequest(suspendUserSchema), suspendUse
 router.post('/users/:id/unsuspend', unsuspendUser);
 router.get('/reports', listReports);
 router.patch('/reports/:id', validateRequest(updateReportSchema), updateReport);
+
+// PA-03 : le catalogue des complexes engage la relation partenaire, il
+// n'est pas alimente par les joueurs.
+router.post('/venues', validateRequest(createVenueSchema), createVenue);
+router.delete('/venues/:id', deactivateVenue);
 
 // B-06 : journal, en lecture seule.
 router.get('/audit-logs', listAuditLogs);

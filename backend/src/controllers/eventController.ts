@@ -5,6 +5,7 @@ import {
   GroupModel as Group,
   GroupMemberModel as GroupMember,
   EventReminderModel as EventReminder,
+  VenueModel as Venue,
   EventInscriptionModel as EventInscription,
   sequelize,
 } from '../models';
@@ -79,7 +80,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       });
     }
 
-    const { title, description, dateTime, location, capacity, level, price, groupId } = req.body;
+    const { title, description, dateTime, location, capacity, level, price, groupId, venueId } = req.body;
 
     // Check if user exists
     const user = await User.findByPk(userId);
@@ -98,6 +99,16 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       }
     }
 
+    // PA-03 : un evenement ne se rattache qu'a un complexe existant et
+    // toujours actif ; un complexe retire du catalogue ne doit plus recevoir
+    // de nouvelles sessions.
+    if (venueId) {
+      const venue = await Venue.findByPk(venueId);
+      if (!venue || !venue.active) {
+        return res.status(404).json({ message: 'Venue not found' });
+      }
+    }
+
     // Create event
     const event = await Event.create({
       title,
@@ -110,6 +121,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       status: 'open', // Default status for new events
       organizerId: userId,
       groupId: groupId || null,
+      venueId: venueId || null,
     });
 
     res.status(201).json(event);
@@ -179,6 +191,7 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
       include: [
         { model: User, as: 'organizer', attributes: PUBLIC_USER_ATTRIBUTES },
         { model: Group, as: 'group' },
+        { model: Venue, as: 'venue' },
         {
           model: User,
           as: 'participants',
@@ -219,7 +232,7 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       return res.status(403).json({ message: 'Not authorized to update this event' });
     }
 
-    const { title, description, dateTime, location, capacity, level, price, groupId } = req.body;
+    const { title, description, dateTime, location, capacity, level, price, groupId, venueId } = req.body;
 
     // If groupId is provided and changed, check ownership
     if (groupId && groupId !== event.groupId) {
@@ -244,6 +257,7 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       level,
       price,
       groupId: groupId || null,
+      venueId: venueId || null,
     });
 
     // N-01 : seuls l'heure et le lieu justifient de rappeler tout le monde.
@@ -647,6 +661,57 @@ export const remindEvent = async (req: Request, res: Response, next: NextFunctio
     await EventReminder.create({ eventId, sentBy: userId, recipientCount: sent });
 
     res.json({ message: 'Reminder sent', recipientCount: sent });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * E-04 : dupliquer un evenement pour la semaine suivante.
+ *
+ * Le CCH.md exige une validation humaine : la copie n'est donc pas
+ * programmee, c'est l'organisateur qui la declenche et qui fournit la
+ * nouvelle date. Rien ne se cree automatiquement dans son dos.
+ *
+ * La copie repart de zero : nouveau lien partageable, aucune inscription
+ * reprise. Reconduire les inscrits reviendrait a les engager sans leur
+ * demander — exactement le contraire de la promesse du produit.
+ */
+export const duplicateEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = (req as any).user.id;
+    const { dateTime } = req.body;
+
+    const source = await Event.findByPk(req.params.id);
+    if (!source) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    if (source.organizerId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to duplicate this event' });
+    }
+
+    if (new Date(dateTime) <= new Date()) {
+      return res.status(400).json({ message: 'The new date must be in the future' });
+    }
+
+    const copy = await Event.create({
+      title: source.title,
+      description: source.description,
+      dateTime: new Date(dateTime),
+      location: source.location,
+      capacity: source.capacity,
+      level: source.level,
+      price: source.price,
+      groupId: source.groupId,
+      venueId: source.venueId,
+      organizerId: userId,
+      // 'draft' et non 'open' : la copie doit etre relue avant d'etre
+      // ouverte, c'est la validation humaine que demande E-04.
+      status: 'draft',
+    });
+
+    res.status(201).json(copy);
   } catch (error) {
     next(error);
   }
