@@ -7,6 +7,7 @@ import {
   EventInscriptionModel as EventInscription,
   GroupMemberModel as GroupMember,
   ReportModel as Report,
+  BugReportModel as BugReport,
   AuditLogModel as AuditLog,
 } from '../models';
 import { audit } from '../services/audit';
@@ -29,18 +30,29 @@ const ADMIN_USER_ATTRIBUTES = [
 /** B-01 : tableau de bord. Volumes et etats, pas de donnees nominatives. */
 export const getStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [users, activeUsers, groups, events, upcomingEvents, inscriptions, openReports] =
-      await Promise.all([
-        User.count(),
-        User.count({ where: { deletedAt: null, suspendedAt: null } }),
-        Group.count(),
-        Event.count(),
-        Event.count({
-          where: { dateTime: { [Op.gt]: new Date() }, status: { [Op.in]: ['open', 'full'] } },
-        }),
-        EventInscription.count({ where: { status: 'confirmed' } }),
-        Report.count({ where: { status: 'open' } }),
-      ]);
+    const [
+      users,
+      activeUsers,
+      groups,
+      events,
+      upcomingEvents,
+      inscriptions,
+      openReports,
+      openBugReports,
+    ] = await Promise.all([
+      User.count(),
+      User.count({ where: { deletedAt: null, suspendedAt: null } }),
+      Group.count(),
+      Event.count(),
+      Event.count({
+        where: { dateTime: { [Op.gt]: new Date() }, status: { [Op.in]: ['open', 'full'] } },
+      }),
+      EventInscription.count({ where: { status: 'confirmed' } }),
+      Report.count({ where: { status: 'open' } }),
+      // Beta : les anomalies non traitees, au meme titre que les
+      // signalements — c'est ce que le back-office doit voir en premier.
+      BugReport.count({ where: { status: { [Op.in]: ['open', 'investigating'] } } }),
+    ]);
 
     res.json({
       users: { total: users, active: activeUsers, deleted: users - activeUsers },
@@ -48,6 +60,7 @@ export const getStats = async (req: Request, res: Response, next: NextFunction) 
       events: { total: events, upcoming: upcomingEvents },
       confirmedInscriptions: inscriptions,
       openReports,
+      openBugReports,
     });
   } catch (error) {
     next(error);
@@ -103,9 +116,9 @@ export const getUserDetail = async (req: Request, res: Response, next: NextFunct
     }
 
     const [groupCount, organizedCount, inscriptionCount] = await Promise.all([
-      GroupMember.count({ where: { userId: user.id } }),
-      Event.count({ where: { organizerId: user.id } }),
-      EventInscription.count({ where: { userId: user.id } }),
+    GroupMember.count({ where: { userId: user.id } }),
+    Event.count({ where: { organizerId: user.id } }),
+    EventInscription.count({ where: { userId: user.id } }),
     ]);
 
     await audit((req as any).user.id, 'admin.user.view', 'user', user.id);

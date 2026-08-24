@@ -21,6 +21,7 @@ import Blocks from './pages/Blocks';
 import AdminRoute from './components/AdminRoute';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminReports from './pages/admin/AdminReports';
+import AdminBugReports from './pages/admin/AdminBugReports';
 import AdminAccounts from './pages/admin/AdminAccounts';
 import AdminAudit from './pages/admin/AdminAudit';
 import AdminVenues from './pages/admin/AdminVenues';
@@ -63,6 +64,7 @@ function App() {
             <Route element={<AdminRoute />}>
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/signalements" element={<AdminReports />} />
+              <Route path="/admin/anomalies" element={<AdminBugReports />} />
               <Route path="/admin/comptes" element={<AdminAccounts />} />
               <Route path="/admin/journal" element={<AdminAudit />} />
               <Route path="/admin/complexes" element={<AdminVenues />} />

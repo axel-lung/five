@@ -6,6 +6,7 @@ const TABLES = [
   'notification_preferences',
   'notifications',
   'reports',
+  'bug_reports',
   'user_blocks',
   'event_inscriptions',
   'events',

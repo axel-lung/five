@@ -13,7 +13,13 @@ import { authenticateToken } from '../middleware/auth';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { validateRequest } from '../middleware/validateRequest';
 import { createVenue, deactivateVenue } from '../controllers/venueController';
-import { suspendUserSchema, updateReportSchema, createVenueSchema } from '../utils/validationSchemas';
+import { listBugReports, updateBugReport } from '../controllers/bugReportController';
+import {
+  suspendUserSchema,
+  updateReportSchema,
+  createVenueSchema,
+  updateBugReportSchema,
+} from '../utils/validationSchemas';
 
 const router = Router();
 
@@ -33,6 +39,11 @@ router.post('/users/:id/suspend', validateRequest(suspendUserSchema), suspendUse
 router.post('/users/:id/unsuspend', unsuspendUser);
 router.get('/reports', listReports);
 router.patch('/reports/:id', validateRequest(updateReportSchema), updateReport);
+
+// Beta : suivi des anomalies remontees par les testeurs. Distinct de la
+// file de moderation : ce qui est en jeu est le produit, pas un compte.
+router.get('/bug-reports', listBugReports);
+router.patch('/bug-reports/:id', validateRequest(updateBugReportSchema), updateBugReport);
 
 // PA-03 : le catalogue des complexes engage la relation partenaire, il
 // n'est pas alimente par les joueurs.

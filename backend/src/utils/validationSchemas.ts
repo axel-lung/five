@@ -129,3 +129,25 @@ export const createVenueSchema = Joi.object({
 export const duplicateEventSchema = Joi.object({
   dateTime: Joi.date().iso().required(),
 });
+
+// Beta : declaration d'anomalie.
+//
+// `context` est rempli par le client, pas par le testeur : il est donc borne
+// a des cles connues et a des longueurs strictes. `unknown(false)` (le
+// defaut de Joi) refuse toute cle en trop, pour qu'un client bavard ne
+// puisse pas stocker n'importe quoi dans le JSONB.
+export const createBugReportSchema = Joi.object({
+  kind: Joi.string().valid('bug', 'display', 'suggestion').default('bug'),
+  severity: Joi.string().valid('blocking', 'major', 'minor').default('major'),
+  description: Joi.string().trim().min(10).max(2000).required(),
+  context: Joi.object({
+    url: Joi.string().max(500).optional(),
+    userAgent: Joi.string().max(500).optional(),
+    viewport: Joi.string().max(20).optional(),
+  }).default({}),
+});
+
+export const updateBugReportSchema = Joi.object({
+  status: Joi.string().valid('open', 'investigating', 'fixed', 'dismissed').required(),
+  resolutionNote: Joi.string().max(1000).optional(),
+});

@@ -34,6 +34,11 @@ const AdminDashboard: React.FC = () => {
 
   const links = [
     { to: '/admin/signalements', label: 'Signalements', hint: `${stats.openReports} en attente` },
+    {
+      to: '/admin/anomalies',
+      label: 'Anomalies',
+      hint: `${stats.openBugReports ?? 0} à traiter`,
+    },
     { to: '/admin/comptes', label: 'Comptes', hint: 'Recherche et modération' },
     { to: '/admin/complexes', label: 'Complexes', hint: 'Catalogue partenaires' },
     { to: '/admin/journal', label: "Journal d'audit", hint: 'Actions sensibles' },

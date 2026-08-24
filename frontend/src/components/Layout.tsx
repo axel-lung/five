@@ -3,6 +3,7 @@ import { Link, Outlet } from 'react-router-dom';
 import api from '../services/api';
 import { useProfile } from '../services/session';
 import BottomNav from './BottomNav';
+import BugReportButton from './BugReportButton';
 
 /**
  * Mise en page des ecrans authentifies.
@@ -51,6 +52,10 @@ export const Layout: React.FC = () => {
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 pb-24 sm:pb-6">
         <Outlet />
       </main>
+
+      {/* Beta : joignable depuis n'importe quel ecran, y compris celui qui
+          vient de mal se comporter. */}
+      <BugReportButton />
     </div>
   );
 };
