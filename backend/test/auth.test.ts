@@ -4,7 +4,7 @@ describe('Authentification', () => {
   it('inscrit un utilisateur et renvoie les deux tokens', async () => {
     const res = await api()
       .post('/api/auth/register')
-      .send({ email: 'alice@example.com', password: 'Test1234!', firstName: 'Alice' });
+      .send({ email: 'alice@example.com', password: 'Test1234!', firstName: 'Alice', acceptTos: true });
 
     expect(res.status).toBe(201);
     expect(res.body.accessToken).toEqual(expect.any(String));
@@ -16,7 +16,7 @@ describe('Authentification', () => {
     const user = await createUser();
     const res = await api()
       .post('/api/auth/register')
-      .send({ email: user.email, password: 'Test1234!' });
+      .send({ email: user.email, password: 'Test1234!', acceptTos: true });
 
     expect(res.status).toBe(409);
   });

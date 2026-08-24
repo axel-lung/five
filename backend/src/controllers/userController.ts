@@ -7,7 +7,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
   try {
     const userId = (req as any).user.id;
     const user = await User.findByPk(userId, {
-      attributes: { exclude: ['passwordHash'] }
+      attributes: { exclude: ['passwordHash', 'emailVerificationToken'] }
     });
 
     if (!user) {
@@ -32,7 +32,10 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
       });
     }
 
-    const { firstName, lastName, phone, avatarUrl, bio, city, preferredPosition, selfDeclaredLevel } = req.body;
+    const {
+      firstName, lastName, phone, avatarUrl, bio, city,
+      preferredPosition, selfDeclaredLevel, preferredSlots, travelRadiusKm,
+    } = req.body;
 
     const [updated] = await User.update(
       {
@@ -44,7 +47,11 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
         city,
         preferredPosition,
         selfDeclaredLevel,
-      },
+        preferredSlots,
+        // null est une valeur voulue (« pas de limite »), distincte d'un
+        // champ absent : User.update ignore undefined, pas null.
+        travelRadiusKm,
+      } as any,
       { where: { id: userId } }
     );
 
@@ -53,7 +60,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
     }
 
     const updatedUser = await User.findByPk(userId, {
-      attributes: { exclude: ['passwordHash'] }
+      attributes: { exclude: ['passwordHash', 'emailVerificationToken'] }
     });
 
     res.json(updatedUser);

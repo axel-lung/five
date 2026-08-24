@@ -1,24 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { GroupModel as Group, UserModel as User, GroupMemberModel as GroupMember, sequelize } from '../models';
 import { Op } from 'sequelize';
-
-/**
- * C-04 : profil minimal expose aux autres membres.
- *
- * `exclude: ['passwordHash']` etait insuffisant — il laissait passer email et
- * telephone. On liste donc explicitement ce qui est partageable plutot que
- * d'enumerer ce qui ne l'est pas : un champ ajoute plus tard reste prive
- * par defaut.
- */
-const PUBLIC_USER_ATTRIBUTES = [
-  'id',
-  'firstName',
-  'lastName',
-  'avatarUrl',
-  'city',
-  'preferredPosition',
-  'selfDeclaredLevel',
-];
+import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
+import { createGroupSchema } from '../utils/validationSchemas';
 
 /** Un groupe prive n'est lisible que par ses membres (G-06). */
 const canViewGroup = async (group: any, userId: string): Promise<boolean> => {
@@ -26,7 +10,6 @@ const canViewGroup = async (group: any, userId: string): Promise<boolean> => {
   const membership = await GroupMember.findOne({ where: { groupId: group.id, userId } });
   return membership !== null;
 };
-import { createGroupSchema } from '../utils/validationSchemas';
 
 // Create a new group
 export const createGroup = async (req: Request, res: Response, next: NextFunction) => {
@@ -40,7 +23,7 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
       });
     }
 
-    const { name, description, city, accessType } = req.body;
+    const { name, description, city, avatarUrl, accessType } = req.body;
 
     // Check if user exists
     const user = await User.findByPk(userId);
@@ -54,7 +37,7 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
     // toutes les actions d'administration lui renvoient 403.
     const group = await sequelize.transaction(async (t) => {
       const created = await Group.create(
-        { name, description, city, accessType, ownerId: userId },
+        { name, description, city, avatarUrl, accessType, ownerId: userId },
         { transaction: t }
       );
 
@@ -156,19 +139,20 @@ export const updateGroup = async (req: Request, res: Response, next: NextFunctio
       return res.status(403).json({ message: 'Not authorized to update this group' });
     }
 
-    const { name, description, city, accessType } = req.body;
+    const { name, description, city, avatarUrl, accessType } = req.body;
 
     await group.update({
       name,
       description,
       city,
+      avatarUrl,
       accessType,
     });
 
     const updatedGroup = await Group.findByPk(groupId, {
       include: [
-        { model: User, as: 'owner', attributes: { exclude: ['passwordHash'] } },
-        { model: User, as: 'members', attributes: { exclude: ['passwordHash'] } }
+        { model: User, as: 'owner', attributes: PUBLIC_USER_ATTRIBUTES },
+        { model: User, as: 'members', attributes: PUBLIC_USER_ATTRIBUTES }
       ]
     });
 
@@ -307,9 +291,30 @@ export const getGroupMembers = async (req: Request, res: Response, next: NextFun
       return res.status(404).json({ message: 'Group not found' });
     }
 
+    // G-05 : recherche sur le prenom ou le nom. Le filtre porte sur la table
+    // jointe, d'ou `required: true` : sans lui, Sequelize ferait un LEFT JOIN
+    // et renverrait les membres non correspondants avec un `user` a null.
+    const q = (req.query.q as string)?.trim();
+    const userWhere = q
+      ? {
+          [Op.or]: [
+            { firstName: { [Op.iLike]: `%${q}%` } },
+            { lastName: { [Op.iLike]: `%${q}%` } },
+          ],
+        }
+      : undefined;
+
     const members = await GroupMember.findAll({
       where: { groupId: group.id },
-      include: [{ model: User, as: 'user', attributes: PUBLIC_USER_ATTRIBUTES }]
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: PUBLIC_USER_ATTRIBUTES,
+          where: userWhere,
+          required: Boolean(userWhere),
+        },
+      ],
     });
 
     res.json(members);

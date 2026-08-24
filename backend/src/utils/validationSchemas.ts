@@ -8,6 +8,12 @@ export const registerSchema = Joi.object({
   lastName: Joi.string().max(100).optional(),
   phone: Joi.string().max(20).optional(),
   city: Joi.string().max(100).optional(),
+  // C-01 : consentements separes. Les CGU sont obligatoires — d'ou
+  // `valid(true)`, qui refuse un `false` explicite autant qu'une absence. Le
+  // marketing reste facultatif : l'accepter ne doit jamais etre la condition
+  // de la creation de compte.
+  acceptTos: Joi.boolean().valid(true).required(),
+  acceptMarketing: Joi.boolean().default(false),
 });
 
 // Login validation schema
@@ -25,7 +31,11 @@ export const updateProfileSchema = Joi.object({
   bio: Joi.string().max(500).optional(),
   city: Joi.string().max(100).optional(),
   preferredPosition: Joi.string().max(50).optional(),
-  selfDeclaredLevel: Joi.number().min(1).min(1).max(5).optional(),
+  selfDeclaredLevel: Joi.number().min(1).max(5).optional(),
+  // C-03 : disponibilites. Les creneaux sont des etiquettes libres cote V1,
+  // le client propose la liste ; le rayon est en kilometres.
+  preferredSlots: Joi.array().items(Joi.string().max(50)).max(20).optional(),
+  travelRadiusKm: Joi.number().integer().min(0).max(200).allow(null).optional(),
 });
 
 // Create group validation schema
@@ -33,6 +43,7 @@ export const createGroupSchema = Joi.object({
   name: Joi.string().max(255).required(),
   description: Joi.string().max(1000).optional(),
   city: Joi.string().max(100).optional(),
+  avatarUrl: Joi.string().uri().optional(),
   accessType: Joi.string().valid('private', 'public').default('private'),
 });
 
@@ -46,6 +57,9 @@ export const createEventSchema = Joi.object({
   level: Joi.string().max(50).optional(),
   price: Joi.number().precision(2).min(0).optional(),
   groupId: Joi.string().uuid().optional(),
+  // PA-03 : rattachement a un complexe. Optionnel — tous les five ne se
+  // jouent pas dans un complexe reference.
+  venueId: Joi.string().uuid().allow(null).optional(),
 });
 
 // E-02 : transitions de statut pilotees par l'organisateur.
@@ -65,3 +79,53 @@ export const createInvitationSchema = Joi.object({
 // Le middleware de validation vit dans middleware/validateRequest.ts.
 // Il en existait une seconde copie ici, chaque fichier important l'une ou
 // l'autre au hasard.
+// S-05 : signalement d'un compte, d'un groupe ou d'un evenement.
+export const createReportSchema = Joi.object({
+  targetType: Joi.string().valid('user', 'group', 'event').required(),
+  targetId: Joi.string().uuid().required(),
+  reason: Joi.string().max(100).required(),
+  details: Joi.string().max(1000).optional(),
+});
+
+// N-04 : preferences de notification. quietHours* acceptent null, qui
+// signifie « pas d'heures de silence » et se distingue d'un champ absent.
+export const updateNotificationPreferencesSchema = Joi.object({
+  pushEnabled: Joi.boolean().optional(),
+  emailEnabled: Joi.boolean().optional(),
+  quietHoursStart: Joi.number().integer().min(0).max(23).allow(null).optional(),
+  quietHoursEnd: Joi.number().integer().min(0).max(23).allow(null).optional(),
+});
+
+// G-03 : changement de role. 'owner' est absent a dessein — il s'obtient par
+// transferOwnership, qui deplace aussi groups.owner_id.
+export const updateMemberRoleSchema = Joi.object({
+  role: Joi.string().valid('admin', 'member').required(),
+});
+
+export const transferOwnershipSchema = Joi.object({
+  newOwnerId: Joi.string().uuid().required(),
+});
+
+// B-02 : moderation.
+export const suspendUserSchema = Joi.object({
+  reason: Joi.string().max(255).required(),
+});
+
+export const updateReportSchema = Joi.object({
+  status: Joi.string().valid('open', 'reviewing', 'resolved', 'dismissed').required(),
+  resolutionNote: Joi.string().max(1000).optional(),
+});
+
+// PA-03 : catalogue des complexes, alimente par le back-office.
+export const createVenueSchema = Joi.object({
+  name: Joi.string().max(255).required(),
+  address: Joi.string().max(255).optional(),
+  city: Joi.string().max(100).optional(),
+  isPartner: Joi.boolean().default(false),
+});
+
+// E-04 : duplication d'un evenement recurrent. La date est obligatoire :
+// dupliquer sans la deplacer creerait un doublon a la meme heure.
+export const duplicateEventSchema = Joi.object({
+  dateTime: Joi.date().iso().required(),
+});

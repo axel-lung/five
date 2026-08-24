@@ -1,23 +1,34 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 
 const Home: React.FC = () => {
+  if (localStorage.getItem('access_token')) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
-    <div className="text-center py-12">
-      <h1 className="text-4xl font-bold mb-6">Five/Futsal</h1>
-      <p className="text-lg text-gray-600 mb-8">
-        Transformez vos sessions de five informelles en rendez-vous fiables
+    <div className="py-10 text-center">
+      <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">
+        Le five, sans les relances
+      </h1>
+      <p className="mt-3 text-gray-600 max-w-md mx-auto">
+        Créez la session, partagez le lien, et voyez qui vient. La liste
+        d'attente se remplit toute seule quand quelqu'un se désiste.
       </p>
-      <div className="space-x-4">
-        <Link to="/login" className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded transition">
-          Se connecter
+
+      <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+        <Link
+          to="/register"
+          className="min-h-[44px] flex items-center justify-center px-6 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition"
+        >
+          Créer un compte
         </Link>
-        <Link to="/register" className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded transition-border border-2 border-green-500">
-          S'inscrire
+        <Link
+          to="/login"
+          className="min-h-[44px] flex items-center justify-center px-6 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 font-semibold transition"
+        >
+          J'ai déjà un compte
         </Link>
-      </div>
-      <div className="mt-10 text-sm text-gray-500">
-        <p>Une application pour créer, remplir, payer, composer et partager vos sessions de five</p>
       </div>
     </div>
   );

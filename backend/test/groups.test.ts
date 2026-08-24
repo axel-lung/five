@@ -263,3 +263,114 @@ describe('Quitter un groupe (G-04)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('Roles et transmission du groupe (G-03)', () => {
+  /** Un groupe, son proprietaire et un membre simple. */
+  const groupWithMember = async () => {
+    const owner = await createUser();
+    const member = await createUser();
+    const group = await createGroup(owner.accessToken);
+    const invitation = await invite(owner.accessToken, group.id);
+    await accept(member.accessToken, invitation.body.token);
+    return { owner, member, group };
+  };
+
+  const setRole = (token: string, groupId: string, userId: string, role: string) =>
+    api()
+      .patch(`/api/groups/${groupId}/members/${userId}/role`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ role });
+
+  const transfer = (token: string, groupId: string, newOwnerId: string) =>
+    api()
+      .post(`/api/groups/${groupId}/transfer-ownership`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ newOwnerId });
+
+  it('promeut un membre admin', async () => {
+    const { owner, member, group } = await groupWithMember();
+
+    const res = await setRole(owner.accessToken, group.id, member.id, 'admin');
+
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe('admin');
+  });
+
+  it('interdit a un membre de se promouvoir', async () => {
+    const { member, group } = await groupWithMember();
+
+    const res = await setRole(member.accessToken, group.id, member.id, 'admin');
+
+    expect(res.status).toBe(403);
+  });
+
+  it('refuse d-attribuer le role owner par cette route', async () => {
+    const { owner, member, group } = await groupWithMember();
+
+    const res = await setRole(owner.accessToken, group.id, member.id, 'owner');
+
+    expect(res.status).toBe(400);
+  });
+
+  it('transmet la propriete et retrograde l-ancien proprietaire en admin', async () => {
+    const { owner, member, group } = await groupWithMember();
+
+    const res = await transfer(owner.accessToken, group.id, member.id);
+    expect(res.status).toBe(200);
+
+    const members = await api()
+      .get(`/api/groups/${group.id}/members`)
+      .set('Authorization', `Bearer ${member.accessToken}`);
+
+    const roles = Object.fromEntries(members.body.map((m: any) => [m.userId, m.role]));
+    expect(roles[member.id]).toBe('owner');
+    expect(roles[owner.id]).toBe('admin');
+  });
+
+  // Le cul-de-sac que ce lot corrige : leaveGroup exigeait une transmission
+  // qu-aucune route ne permettait.
+  it('permet enfin a l-ancien proprietaire de quitter le groupe', async () => {
+    const { owner, member, group } = await groupWithMember();
+
+    const before = await api()
+      .post(`/api/groups/${group.id}/leave`)
+      .set('Authorization', `Bearer ${owner.accessToken}`);
+    expect(before.status).toBe(400);
+
+    await transfer(owner.accessToken, group.id, member.id);
+
+    const after = await api()
+      .post(`/api/groups/${group.id}/leave`)
+      .set('Authorization', `Bearer ${owner.accessToken}`);
+    expect(after.status).toBe(200);
+  });
+
+  it('refuse de transmettre a un non-membre', async () => {
+    const { owner, group } = await groupWithMember();
+    const stranger = await createUser();
+
+    const res = await transfer(owner.accessToken, group.id, stranger.id);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('interdit a un tiers de transmettre le groupe', async () => {
+    const { member, group } = await groupWithMember();
+
+    const res = await transfer(member.accessToken, group.id, member.id);
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('Avatar de groupe (G-01)', () => {
+  it('accepte un avatar a la creation', async () => {
+    const owner = await createUser();
+
+    const group = await createGroup(owner.accessToken, {
+      avatarUrl: 'https://example.com/logo.png',
+    });
+
+    expect(group.avatarUrl).toBe('https://example.com/logo.png');
+  });
+});

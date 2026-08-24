@@ -1,11 +1,18 @@
 import { sequelize } from '../src/models';
 
 const TABLES = [
+  'audit_logs',
+  'event_reminders',
+  'notification_preferences',
+  'notifications',
+  'reports',
+  'user_blocks',
   'event_inscriptions',
   'events',
   'group_invitations',
   'group_members',
   'groups',
+  'venues',
   'users',
 ];
 

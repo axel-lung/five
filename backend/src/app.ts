@@ -7,6 +7,12 @@ import userRoutes from './routes/userRoutes';
 import groupRoutes from './routes/groupRoutes';
 import eventRoutes from './routes/eventRoutes';
 import authRoutes from './routes/authRoutes';
+import reportRoutes from './routes/reportRoutes';
+import notificationRoutes from './routes/notificationRoutes';
+import adminRoutes from './routes/adminRoutes';
+import venueRoutes from './routes/venueRoutes';
+import mediaRoutes from './routes/mediaRoutes';
+import { authLimiter } from './middleware/rateLimit';
 
 /**
  * L'application Express, sans ecoute reseau ni connexion base.
@@ -17,7 +23,14 @@ import authRoutes from './routes/authRoutes';
 export const app: Express = express();
 
 // Middleware
-app.use(helmet());
+app.use(
+  helmet({
+    // Les avatars sont servis par l'API et affiches par le frontend, sur une
+    // origine differente. La politique par defaut de helmet
+    // (Cross-Origin-Resource-Policy: same-origin) les bloquerait.
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 app.use(cors());
 if (env.nodeEnv !== 'test') {
   app.use(morgan('dev'));
@@ -26,10 +39,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/api/auth', authRoutes);
+// S-05 : la limite de debit se pose AVANT le routeur, pour couvrir login,
+// register et refresh d'un seul tenant.
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/venues', venueRoutes);
+app.use('/api/media', mediaRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {

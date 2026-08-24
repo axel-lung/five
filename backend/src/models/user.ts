@@ -15,6 +15,16 @@ export interface UserAttributes {
   selfDeclaredLevel?: number;
   emailVerified?: boolean;
   phoneVerified?: boolean;
+  deletedAt?: Date | null;
+  consentTosAt?: Date | null;
+  consentMarketingAt?: Date | null;
+  emailVerificationToken?: string | null;
+  emailVerificationSentAt?: Date | null;
+  role?: 'user' | 'admin';
+  preferredSlots?: string[];
+  travelRadiusKm?: number | null;
+  suspendedAt?: Date | null;
+  suspensionReason?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -40,6 +50,16 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
   public selfDeclaredLevel?: number;
   public emailVerified?: boolean;
   public phoneVerified?: boolean;
+  public deletedAt?: Date | null;
+  public consentTosAt?: Date | null;
+  public consentMarketingAt?: Date | null;
+  public emailVerificationToken?: string | null;
+  public emailVerificationSentAt?: Date | null;
+  public role?: 'user' | 'admin';
+  public preferredSlots?: string[];
+  public travelRadiusKm?: number | null;
+  public suspendedAt?: Date | null;
+  public suspensionReason?: string | null;
   public createdAt?: Date;
   public updatedAt?: Date;
 
@@ -102,6 +122,51 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
           type: DataTypes.BOOLEAN,
           allowNull: false,
           defaultValue: false,
+        },
+        // C-06 : un compte efface est anonymise sur place, jamais supprime.
+        deletedAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+        },
+        consentTosAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+        },
+        consentMarketingAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+        },
+        emailVerificationToken: {
+          type: DataTypes.UUID,
+          allowNull: true,
+        },
+        emailVerificationSentAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+        },
+        // B-01 : aucune route n'ecrit ce champ, par choix. Voir migration 0006.
+        role: {
+          type: DataTypes.ENUM('user', 'admin'),
+          allowNull: false,
+          defaultValue: 'user',
+        },
+        suspendedAt: {
+          type: DataTypes.DATE,
+          allowNull: true,
+        },
+        suspensionReason: {
+          type: DataTypes.STRING(255),
+          allowNull: true,
+        },
+        // C-03 : creneaux preferes, ex. ['mardi-soir', 'jeudi-soir'].
+        preferredSlots: {
+          type: DataTypes.JSONB,
+          allowNull: false,
+          defaultValue: [],
+        },
+        travelRadiusKm: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
         },
       },
       {

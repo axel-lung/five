@@ -1,27 +1,71 @@
 import { Request, Response, NextFunction } from 'express';
-import { EventModel as Event, UserModel as User, GroupModel as Group, EventInscriptionModel as EventInscription, sequelize } from '../models';
-import { Op, Transaction } from 'sequelize';
+import {
+  EventModel as Event,
+  UserModel as User,
+  GroupModel as Group,
+  GroupMemberModel as GroupMember,
+  EventReminderModel as EventReminder,
+  VenueModel as Venue,
+  EventInscriptionModel as EventInscription,
+  sequelize,
+} from '../models';
+import { Op } from 'sequelize';
 import { createEventSchema } from '../utils/validationSchemas';
+import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
+import { cancelInscription, syncCapacityStatus } from '../services/inscriptions';
+import { isBlockedBetween } from './moderationController';
+import { notify, notifyMany } from '../services/notifications';
 
 /**
- * Recalcule 'open' <-> 'full' a partir du nombre de places confirmees.
- * Les statuts pilotes par l'organisateur (draft, completed, cancelled) ne sont
- * jamais ecrases : seule la bascule liee a la capacite est automatique.
+ * G-06 / C-04 : un evenement rattache a un groupe prive ne regarde que ses
+ * membres. Meme regle que canViewGroup cote groupes, appliquee ici a
+ * l'evenement via son groupe.
+ *
+ * Un evenement sans groupe reste visible : il n'existe que par son lien
+ * partageable (E-07), et la recherche de sessions ouvertes (D-01) est ciblee
+ * V1.5. L'organisateur voit toujours le sien, y compris en brouillon.
  */
-const syncCapacityStatus = async (event: any, t: Transaction): Promise<void> => {
-  if (event.status !== 'open' && event.status !== 'full') {
-    return;
-  }
+const canViewEvent = async (event: any, userId: string): Promise<boolean> => {
+  if (event.organizerId === userId) return true;
+  if (!event.groupId) return true;
 
-  const confirmedCount = await EventInscription.count({
-    where: { eventId: event.id, status: 'confirmed' },
+  const group = await Group.findByPk(event.groupId);
+  if (!group) return true;
+  if (group.accessType === 'public') return true;
+
+  const membership = await GroupMember.findOne({ where: { groupId: group.id, userId } });
+  return membership !== null;
+};
+
+/** Les inscrits encore actifs d'un evenement : le public d'une notification. */
+const inscribedUserIds = async (eventId: string, t: any): Promise<string[]> => {
+  const inscriptions = await EventInscription.findAll({
+    where: { eventId, status: { [Op.in]: ['pending', 'confirmed', 'waitlist'] } },
+    attributes: ['userId'],
     transaction: t,
   });
 
-  const nextStatus = confirmedCount >= event.capacity ? 'full' : 'open';
-  if (nextStatus !== event.status) {
-    await event.update({ status: nextStatus }, { transaction: t });
-  }
+  return inscriptions.map((i: any) => i.userId);
+};
+
+/** Les groupes dont l'appelant peut voir les evenements : les siens + les publics. */
+const visibleGroupIds = async (userId: string): Promise<string[]> => {
+  const memberships = await GroupMember.findAll({
+    where: { userId },
+    attributes: ['groupId'],
+  });
+
+  const groups = await Group.findAll({
+    where: {
+      [Op.or]: [
+        { id: { [Op.in]: memberships.map((m: any) => m.groupId) } },
+        { accessType: 'public' },
+      ],
+    },
+    attributes: ['id'],
+  });
+
+  return groups.map((g: any) => g.id);
 };
 
 // Create a new event
@@ -36,7 +80,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       });
     }
 
-    const { title, description, dateTime, location, capacity, level, price, groupId } = req.body;
+    const { title, description, dateTime, location, capacity, level, price, groupId, venueId } = req.body;
 
     // Check if user exists
     const user = await User.findByPk(userId);
@@ -55,6 +99,16 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       }
     }
 
+    // PA-03 : un evenement ne se rattache qu'a un complexe existant et
+    // toujours actif ; un complexe retire du catalogue ne doit plus recevoir
+    // de nouvelles sessions.
+    if (venueId) {
+      const venue = await Venue.findByPk(venueId);
+      if (!venue || !venue.active) {
+        return res.status(404).json({ message: 'Venue not found' });
+      }
+    }
+
     // Create event
     const event = await Event.create({
       title,
@@ -67,6 +121,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       status: 'open', // Default status for new events
       organizerId: userId,
       groupId: groupId || null,
+      venueId: venueId || null,
     });
 
     res.status(201).json(event);
@@ -78,6 +133,8 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 // Get all events (with filtering and pagination - simplified for V0)
 export const getEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const userId = (req as any).user.id;
+
     // Get query parameters for filtering
     const { date, city, level } = req.query;
 
@@ -85,7 +142,16 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
     // 'full' doit rester visible : un evenement complet interesse toujours,
     // ne serait-ce que pour rejoindre la liste d'attente. Seuls draft,
     // completed et cancelled sont masques.
-    const whereClause: any = { status: { [Op.in]: ['open', 'full'] } };
+    const whereClause: any = {
+      status: { [Op.in]: ['open', 'full'] },
+      // Sans ce filtre, la liste renvoyait les evenements de TOUS les groupes,
+      // prives compris, a n'importe quel compte authentifie.
+      [Op.or]: [
+        { groupId: null },
+        { groupId: { [Op.in]: await visibleGroupIds(userId) } },
+        { organizerId: userId },
+      ],
+    };
 
     if (date) {
       const startDate = new Date(date as string);
@@ -103,7 +169,7 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
     const events = await Event.findAll({
       where: whereClause,
       include: [
-        { model: User, as: 'organizer', attributes: { exclude: ['passwordHash'] } },
+        { model: User, as: 'organizer', attributes: PUBLIC_USER_ATTRIBUTES },
         { model: Group, as: 'group' }
       ],
       order: [['dateTime', 'ASC']]
@@ -119,19 +185,28 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
 export const getEventById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
+    const userId = (req as any).user.id;
+
     const event = await Event.findByPk(eventId, {
       include: [
-        { model: User, as: 'organizer', attributes: { exclude: ['passwordHash'] } },
+        { model: User, as: 'organizer', attributes: PUBLIC_USER_ATTRIBUTES },
         { model: Group, as: 'group' },
+        { model: Venue, as: 'venue' },
         {
           model: User,
           as: 'participants',
-          attributes: { exclude: ['passwordHash'] }
+          attributes: PUBLIC_USER_ATTRIBUTES
         }
       ]
     });
 
     if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // 404 plutot que 403 : l'existence d'un evenement de groupe prive ne
+    // regarde pas les non-membres, comme pour getGroupById.
+    if (!(await canViewEvent(event, userId))) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
@@ -157,7 +232,7 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       return res.status(403).json({ message: 'Not authorized to update this event' });
     }
 
-    const { title, description, dateTime, location, capacity, level, price, groupId } = req.body;
+    const { title, description, dateTime, location, capacity, level, price, groupId, venueId } = req.body;
 
     // If groupId is provided and changed, check ownership
     if (groupId && groupId !== event.groupId) {
@@ -170,6 +245,9 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       }
     }
 
+    const previousDateTime = event.dateTime;
+    const previousLocation = event.location;
+
     await event.update({
       title,
       description,
@@ -179,11 +257,33 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       level,
       price,
       groupId: groupId || null,
+      venueId: venueId || null,
     });
+
+    // N-01 : seuls l'heure et le lieu justifient de rappeler tout le monde.
+    // Un titre corrige ne doit pas declencher une notification par joueur.
+    const timeChanged = new Date(previousDateTime).getTime() !== new Date(event.dateTime).getTime();
+    if (timeChanged || previousLocation !== event.location) {
+      // Hors transaction : updateEvent n'en ouvre pas, et l'evenement est
+      // deja enregistre. Une notification perdue vaut mieux qu'une mise a
+      // jour refusee pour cette raison.
+      const audience = await inscribedUserIds(event.id, undefined);
+      await notifyMany(
+        audience.filter((id: string) => id !== userId),
+        'event.updated',
+        {
+          eventId: event.id,
+          title: event.title,
+          dateTime: event.dateTime,
+          location: event.location,
+        },
+        null
+      );
+    }
 
     const updatedEvent = await Event.findByPk(eventId, {
       include: [
-        { model: User, as: 'organizer', attributes: { exclude: ['passwordHash'] } },
+        { model: User, as: 'organizer', attributes: PUBLIC_USER_ATTRIBUTES },
         { model: Group, as: 'group' }
       ]
     });
@@ -242,6 +342,14 @@ export const joinEvent = async (req: Request, res: Response, next: NextFunction)
 
       if (event.status !== 'open' && event.status !== 'full') {
         return { error: { code: 400, message: 'Event is not open for registration' } };
+      }
+
+      // D-06 : verifie DANS la transaction, pour voir le meme etat que
+      // l'inscription qui suit. 404 plutot que 403 : l'organisateur n'a pas a
+      // apprendre qu'il a ete bloque, ni le joueur a se voir confirmer qu'il
+      // l'est.
+      if (await isBlockedBetween(userId, event.organizerId, t)) {
+        return { error: { code: 404, message: 'Event not found' } };
       }
 
       const existing = await EventInscription.findOne({
@@ -312,25 +420,20 @@ export const leaveEvent = async (req: Request, res: Response, next: NextFunction
         return { error: { code: 404, message: 'You are not registered for this event' } };
       }
 
-      const wasConfirmed = inscription.status === 'confirmed';
-      await inscription.update({ status: 'cancelled' }, { transaction: t });
+      const promotedUserId = await cancelInscription(event, inscription, t);
 
-      let promoted = null;
-      if (wasConfirmed) {
-        promoted = await EventInscription.findOne({
-          where: { eventId, status: 'waitlist' },
-          order: [['registeredAt', 'ASC']],
-          transaction: t,
-        });
-
-        if (promoted) {
-          await promoted.update({ status: 'confirmed' }, { transaction: t });
-        }
+      // N-01 : le promu doit apprendre qu'il a une place. Emise dans la meme
+      // transaction que la promotion : les deux vivent ou meurent ensemble.
+      if (promotedUserId) {
+        await notify(
+          promotedUserId,
+          'event.spot_released',
+          { eventId: event.id, title: event.title, dateTime: event.dateTime },
+          t
+        );
       }
 
-      await syncCapacityStatus(event, t);
-
-      return { promotedUserId: promoted ? promoted.userId : null };
+      return { promotedUserId };
     });
 
     if (result.error) {
@@ -380,6 +483,18 @@ export const updateEventStatus = async (req: Request, res: Response, next: NextF
       // capacite est deja atteinte.
       if (status === 'open') {
         await syncCapacityStatus(event, t);
+      }
+
+      // N-01 : ouverture et annulation interessent les inscrits. Un brouillon
+      // qui s'ouvre n'en a pas encore, l'appel est alors sans effet.
+      if (status === 'open' || status === 'cancelled') {
+        const audience = await inscribedUserIds(event.id, t);
+        await notifyMany(
+          audience.filter((id: string) => id !== userId),
+          status === 'open' ? 'event.opened' : 'event.cancelled',
+          { eventId: event.id, title: event.title, dateTime: event.dateTime },
+          t
+        );
       }
 
       return { event };
@@ -445,10 +560,15 @@ export const getSharedEvent = async (req: Request, res: Response, next: NextFunc
 export const getEventParticipants = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
+    const userId = (req as any).user.id;
 
     // Find event
     const event = await Event.findByPk(eventId);
     if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    if (!(await canViewEvent(event, userId))) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
@@ -458,13 +578,140 @@ export const getEventParticipants = async (req: Request, res: Response, next: Ne
         {
           model: User,
           as: 'user',
-          attributes: { exclude: ['passwordHash'] }
+          attributes: PUBLIC_USER_ATTRIBUTES
         }
       ],
       order: [['registeredAt', 'ASC']]
     });
 
     res.json(participants);
+  } catch (error) {
+    next(error);
+  }
+};
+/** Plafond N-03 : une relance par evenement et par periode. */
+const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * N-03 : relancer les non-repondants.
+ *
+ * Reservee a l'organisateur, et limitee aux membres du groupe qui n'ont pas
+ * encore repondu — relancer un joueur deja inscrit serait exactement le bruit
+ * que le produit cherche a supprimer.
+ *
+ * L'exigence anti-spam de N-03 est portee par le plafond : une relance par
+ * evenement toutes les 24 h, quelle que soit l'insistance de l'organisateur.
+ */
+export const remindEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const eventId = req.params.id;
+    const userId = (req as any).user.id;
+
+    const event = await Event.findByPk(eventId);
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    if (event.organizerId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to send reminders for this event' });
+    }
+
+    if (event.status !== 'open' && event.status !== 'full') {
+      return res.status(400).json({ message: 'Event is not open for registration' });
+    }
+
+    if (!event.groupId) {
+      return res.status(400).json({ message: 'Only a group event can be reminded' });
+    }
+
+    const lastReminder = await EventReminder.findOne({
+      where: { eventId },
+      order: [['createdAt', 'DESC']],
+    });
+
+    if (
+      lastReminder &&
+      Date.now() - new Date(lastReminder.createdAt as Date).getTime() < REMINDER_COOLDOWN_MS
+    ) {
+      return res.status(429).json({ message: 'A reminder was already sent for this event today' });
+    }
+
+    const members = await GroupMember.findAll({
+      where: { groupId: event.groupId },
+      attributes: ['userId'],
+    });
+
+    const answered = await EventInscription.findAll({
+      where: { eventId, status: { [Op.in]: ['pending', 'confirmed', 'waitlist'] } },
+      attributes: ['userId'],
+    });
+    const answeredIds = new Set(answered.map((i: any) => i.userId));
+
+    const recipients = members
+      .map((m: any) => m.userId)
+      .filter((id: string) => id !== userId && !answeredIds.has(id));
+
+    const sent = await notifyMany(
+      recipients,
+      'event.reminder',
+      { eventId: event.id, title: event.title, dateTime: event.dateTime },
+      null
+    );
+
+    await EventReminder.create({ eventId, sentBy: userId, recipientCount: sent });
+
+    res.json({ message: 'Reminder sent', recipientCount: sent });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * E-04 : dupliquer un evenement pour la semaine suivante.
+ *
+ * Le CCH.md exige une validation humaine : la copie n'est donc pas
+ * programmee, c'est l'organisateur qui la declenche et qui fournit la
+ * nouvelle date. Rien ne se cree automatiquement dans son dos.
+ *
+ * La copie repart de zero : nouveau lien partageable, aucune inscription
+ * reprise. Reconduire les inscrits reviendrait a les engager sans leur
+ * demander — exactement le contraire de la promesse du produit.
+ */
+export const duplicateEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = (req as any).user.id;
+    const { dateTime } = req.body;
+
+    const source = await Event.findByPk(req.params.id);
+    if (!source) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    if (source.organizerId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to duplicate this event' });
+    }
+
+    if (new Date(dateTime) <= new Date()) {
+      return res.status(400).json({ message: 'The new date must be in the future' });
+    }
+
+    const copy = await Event.create({
+      title: source.title,
+      description: source.description,
+      dateTime: new Date(dateTime),
+      location: source.location,
+      capacity: source.capacity,
+      level: source.level,
+      price: source.price,
+      groupId: source.groupId,
+      venueId: source.venueId,
+      organizerId: userId,
+      // 'draft' et non 'open' : la copie doit etre relue avant d'etre
+      // ouverte, c'est la validation humaine que demande E-04.
+      status: 'draft',
+    });
+
+    res.status(201).json(copy);
   } catch (error) {
     next(error);
   }

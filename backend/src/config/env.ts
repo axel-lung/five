@@ -24,4 +24,14 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL ?? '1h',
   refreshTokenTtl: process.env.REFRESH_TOKEN_TTL ?? '30d',
+
+  // Stockage objet (MinIO, compatible S3). Fourni par docker-compose.yml.
+  // Absent en developpement et en test : le service de stockage bascule
+  // alors sur une implementation en memoire, sans quoi la suite de tests
+  // exigerait un MinIO en marche.
+  minioEndpoint: process.env.MINIO_ENDPOINT,
+  minioAccessKey: process.env.MINIO_ACCESS_KEY,
+  minioSecretKey: process.env.MINIO_SECRET_KEY,
+  minioUseSsl: process.env.MINIO_USE_SSL === 'true',
+  mediaBucket: process.env.MEDIA_BUCKET ?? 'five-media',
 };
