@@ -9,7 +9,8 @@ import {
   joinEvent,
   leaveEvent,
   getEventParticipants,
-  getSharedEvent
+  getSharedEvent,
+  remindEvent
 } from '../controllers/eventController';
 import { authenticateToken } from '../middleware/auth';
 import { validateRequest } from '../middleware/validateRequest';
@@ -37,5 +38,8 @@ router.delete('/:id', deleteEvent);
 router.post('/:id/join', joinEvent);
 router.post('/:id/leave', leaveEvent);
 router.get('/:id/participants', getEventParticipants);
+
+// N-03 : relance des non-repondants, plafonnee cote controleur.
+router.post('/:id/remind', remindEvent);
 
 export default router;

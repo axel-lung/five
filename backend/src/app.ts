@@ -8,6 +8,7 @@ import groupRoutes from './routes/groupRoutes';
 import eventRoutes from './routes/eventRoutes';
 import authRoutes from './routes/authRoutes';
 import reportRoutes from './routes/reportRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 import { authLimiter } from './middleware/rateLimit';
 
 /**
@@ -35,6 +36,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {

@@ -4,6 +4,7 @@ import {
   UserModel as User,
   GroupModel as Group,
   GroupMemberModel as GroupMember,
+  EventReminderModel as EventReminder,
   EventInscriptionModel as EventInscription,
   sequelize,
 } from '../models';
@@ -12,6 +13,7 @@ import { createEventSchema } from '../utils/validationSchemas';
 import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
 import { cancelInscription, syncCapacityStatus } from '../services/inscriptions';
 import { isBlockedBetween } from './moderationController';
+import { notify, notifyMany } from '../services/notifications';
 
 /**
  * G-06 / C-04 : un evenement rattache a un groupe prive ne regarde que ses
@@ -32,6 +34,17 @@ const canViewEvent = async (event: any, userId: string): Promise<boolean> => {
 
   const membership = await GroupMember.findOne({ where: { groupId: group.id, userId } });
   return membership !== null;
+};
+
+/** Les inscrits encore actifs d'un evenement : le public d'une notification. */
+const inscribedUserIds = async (eventId: string, t: any): Promise<string[]> => {
+  const inscriptions = await EventInscription.findAll({
+    where: { eventId, status: { [Op.in]: ['pending', 'confirmed', 'waitlist'] } },
+    attributes: ['userId'],
+    transaction: t,
+  });
+
+  return inscriptions.map((i: any) => i.userId);
 };
 
 /** Les groupes dont l'appelant peut voir les evenements : les siens + les publics. */
@@ -219,6 +232,9 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       }
     }
 
+    const previousDateTime = event.dateTime;
+    const previousLocation = event.location;
+
     await event.update({
       title,
       description,
@@ -229,6 +245,27 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       price,
       groupId: groupId || null,
     });
+
+    // N-01 : seuls l'heure et le lieu justifient de rappeler tout le monde.
+    // Un titre corrige ne doit pas declencher une notification par joueur.
+    const timeChanged = new Date(previousDateTime).getTime() !== new Date(event.dateTime).getTime();
+    if (timeChanged || previousLocation !== event.location) {
+      // Hors transaction : updateEvent n'en ouvre pas, et l'evenement est
+      // deja enregistre. Une notification perdue vaut mieux qu'une mise a
+      // jour refusee pour cette raison.
+      const audience = await inscribedUserIds(event.id, undefined);
+      await notifyMany(
+        audience.filter((id: string) => id !== userId),
+        'event.updated',
+        {
+          eventId: event.id,
+          title: event.title,
+          dateTime: event.dateTime,
+          location: event.location,
+        },
+        null
+      );
+    }
 
     const updatedEvent = await Event.findByPk(eventId, {
       include: [
@@ -371,6 +408,17 @@ export const leaveEvent = async (req: Request, res: Response, next: NextFunction
 
       const promotedUserId = await cancelInscription(event, inscription, t);
 
+      // N-01 : le promu doit apprendre qu'il a une place. Emise dans la meme
+      // transaction que la promotion : les deux vivent ou meurent ensemble.
+      if (promotedUserId) {
+        await notify(
+          promotedUserId,
+          'event.spot_released',
+          { eventId: event.id, title: event.title, dateTime: event.dateTime },
+          t
+        );
+      }
+
       return { promotedUserId };
     });
 
@@ -421,6 +469,18 @@ export const updateEventStatus = async (req: Request, res: Response, next: NextF
       // capacite est deja atteinte.
       if (status === 'open') {
         await syncCapacityStatus(event, t);
+      }
+
+      // N-01 : ouverture et annulation interessent les inscrits. Un brouillon
+      // qui s'ouvre n'en a pas encore, l'appel est alors sans effet.
+      if (status === 'open' || status === 'cancelled') {
+        const audience = await inscribedUserIds(event.id, t);
+        await notifyMany(
+          audience.filter((id: string) => id !== userId),
+          status === 'open' ? 'event.opened' : 'event.cancelled',
+          { eventId: event.id, title: event.title, dateTime: event.dateTime },
+          t
+        );
       }
 
       return { event };
@@ -511,6 +571,82 @@ export const getEventParticipants = async (req: Request, res: Response, next: Ne
     });
 
     res.json(participants);
+  } catch (error) {
+    next(error);
+  }
+};
+/** Plafond N-03 : une relance par evenement et par periode. */
+const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * N-03 : relancer les non-repondants.
+ *
+ * Reservee a l'organisateur, et limitee aux membres du groupe qui n'ont pas
+ * encore repondu — relancer un joueur deja inscrit serait exactement le bruit
+ * que le produit cherche a supprimer.
+ *
+ * L'exigence anti-spam de N-03 est portee par le plafond : une relance par
+ * evenement toutes les 24 h, quelle que soit l'insistance de l'organisateur.
+ */
+export const remindEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const eventId = req.params.id;
+    const userId = (req as any).user.id;
+
+    const event = await Event.findByPk(eventId);
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    if (event.organizerId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to send reminders for this event' });
+    }
+
+    if (event.status !== 'open' && event.status !== 'full') {
+      return res.status(400).json({ message: 'Event is not open for registration' });
+    }
+
+    if (!event.groupId) {
+      return res.status(400).json({ message: 'Only a group event can be reminded' });
+    }
+
+    const lastReminder = await EventReminder.findOne({
+      where: { eventId },
+      order: [['createdAt', 'DESC']],
+    });
+
+    if (
+      lastReminder &&
+      Date.now() - new Date(lastReminder.createdAt as Date).getTime() < REMINDER_COOLDOWN_MS
+    ) {
+      return res.status(429).json({ message: 'A reminder was already sent for this event today' });
+    }
+
+    const members = await GroupMember.findAll({
+      where: { groupId: event.groupId },
+      attributes: ['userId'],
+    });
+
+    const answered = await EventInscription.findAll({
+      where: { eventId, status: { [Op.in]: ['pending', 'confirmed', 'waitlist'] } },
+      attributes: ['userId'],
+    });
+    const answeredIds = new Set(answered.map((i: any) => i.userId));
+
+    const recipients = members
+      .map((m: any) => m.userId)
+      .filter((id: string) => id !== userId && !answeredIds.has(id));
+
+    const sent = await notifyMany(
+      recipients,
+      'event.reminder',
+      { eventId: event.id, title: event.title, dateTime: event.dateTime },
+      null
+    );
+
+    await EventReminder.create({ eventId, sentBy: userId, recipientCount: sent });
+
+    res.json({ message: 'Reminder sent', recipientCount: sent });
   } catch (error) {
     next(error);
   }

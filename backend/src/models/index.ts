@@ -8,6 +8,9 @@ import { GroupMember } from './groupMember';
 import { GroupInvitation } from './groupInvitation';
 import { UserBlock } from './userBlock';
 import { Report } from './report';
+import { Notification } from './notification';
+import { NotificationPreference } from './notificationPreference';
+import { EventReminder } from './eventReminder';
 
 // Initialize Sequelize connection
 export const sequelize = new Sequelize(env.databaseUrl, {
@@ -29,6 +32,9 @@ export const GroupMemberModel = GroupMember.initModel(sequelize);
 export const GroupInvitationModel = GroupInvitation.initModel(sequelize);
 export const UserBlockModel = UserBlock.initModel(sequelize);
 export const ReportModel = Report.initModel(sequelize);
+export const NotificationModel = Notification.initModel(sequelize);
+export const NotificationPreferenceModel = NotificationPreference.initModel(sequelize);
+export const EventReminderModel = EventReminder.initModel(sequelize);
 
 // Set up associations
 User.associate = ({ Group, Event, EventInscription, GroupMember }) => {
@@ -100,5 +106,8 @@ GroupMember.associate({ Group: GroupModel, User: UserModel });
 GroupInvitation.associate({ Group: GroupModel, User: UserModel });
 UserBlock.associate({ UserModel });
 Report.associate({ UserModel });
+Notification.associate({ UserModel });
+NotificationPreference.associate({ UserModel });
+EventReminder.associate({ EventModel, UserModel });
 
 export { sequelize as default };

@@ -78,3 +78,12 @@ export const createReportSchema = Joi.object({
   reason: Joi.string().max(100).required(),
   details: Joi.string().max(1000).optional(),
 });
+
+// N-04 : preferences de notification. quietHours* acceptent null, qui
+// signifie « pas d'heures de silence » et se distingue d'un champ absent.
+export const updateNotificationPreferencesSchema = Joi.object({
+  pushEnabled: Joi.boolean().optional(),
+  emailEnabled: Joi.boolean().optional(),
+  quietHoursStart: Joi.number().integer().min(0).max(23).allow(null).optional(),
+  quietHoursEnd: Joi.number().integer().min(0).max(23).allow(null).optional(),
+});

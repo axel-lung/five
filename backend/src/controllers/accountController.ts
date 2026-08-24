@@ -9,6 +9,7 @@ import {
   sequelize,
 } from '../models';
 import { cancelInscription } from '../services/inscriptions';
+import { notify, notifyMany } from '../services/notifications';
 
 /**
  * C-06 : effacement du compte.
@@ -63,17 +64,36 @@ export const deleteAccount = async (req: Request, res: Response, next: NextFunct
       // 2. Evenements organises : annuler ceux a venir, garder les passes.
       // Un evenement passe fait partie de l'historique des autres joueurs ;
       // un evenement futur n'aurait plus personne pour l'administrer.
-      await Event.update(
-        { status: 'cancelled' },
-        {
+      const upcoming = await Event.findAll({
+        where: {
+          organizerId: userId,
+          dateTime: { [Op.gt]: new Date() },
+          status: { [Op.in]: ['draft', 'open', 'full'] },
+        },
+        transaction: t,
+      });
+
+      for (const event of upcoming) {
+        await event.update({ status: 'cancelled' }, { transaction: t });
+
+        // N-01 : les inscrits doivent apprendre l'annulation ; sans cela ils
+        // se presenteraient au terrain.
+        const inscribed = await EventInscription.findAll({
           where: {
-            organizerId: userId,
-            dateTime: { [Op.gt]: new Date() },
-            status: { [Op.in]: ['draft', 'open', 'full'] },
+            eventId: event.id,
+            status: { [Op.in]: ['pending', 'confirmed', 'waitlist'] },
           },
+          attributes: ['userId'],
           transaction: t,
-        }
-      );
+        });
+
+        await notifyMany(
+          inscribed.map((i: any) => i.userId).filter((id: string) => id !== userId),
+          'event.cancelled',
+          { eventId: event.id, title: event.title, dateTime: event.dateTime },
+          t
+        );
+      }
 
       // 3. Inscriptions a venir : liberer la place et promouvoir la liste
       // d'attente, exactement comme un desistement volontaire.
@@ -89,7 +109,15 @@ export const deleteAccount = async (req: Request, res: Response, next: NextFunct
         });
         if (!event || event.dateTime <= new Date()) continue;
 
-        await cancelInscription(event, inscription, t);
+        const promotedUserId = await cancelInscription(event, inscription, t);
+        if (promotedUserId) {
+          await notify(
+            promotedUserId,
+            'event.spot_released',
+            { eventId: event.id, title: event.title, dateTime: event.dateTime },
+            t
+          );
+        }
       }
 
       // 4. Sortie de tous les groupes.
