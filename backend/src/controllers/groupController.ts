@@ -23,7 +23,7 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
       });
     }
 
-    const { name, description, city, accessType } = req.body;
+    const { name, description, city, avatarUrl, accessType } = req.body;
 
     // Check if user exists
     const user = await User.findByPk(userId);
@@ -37,7 +37,7 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
     // toutes les actions d'administration lui renvoient 403.
     const group = await sequelize.transaction(async (t) => {
       const created = await Group.create(
-        { name, description, city, accessType, ownerId: userId },
+        { name, description, city, avatarUrl, accessType, ownerId: userId },
         { transaction: t }
       );
 
@@ -139,12 +139,13 @@ export const updateGroup = async (req: Request, res: Response, next: NextFunctio
       return res.status(403).json({ message: 'Not authorized to update this group' });
     }
 
-    const { name, description, city, accessType } = req.body;
+    const { name, description, city, avatarUrl, accessType } = req.body;
 
     await group.update({
       name,
       description,
       city,
+      avatarUrl,
       accessType,
     });
 

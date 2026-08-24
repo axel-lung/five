@@ -252,3 +252,117 @@ export const leaveGroup = async (req: Request, res: Response, next: NextFunction
     next(error);
   }
 };
+
+/**
+ * G-03 : changer le role d'un membre.
+ *
+ * Reserve au proprietaire : un admin qui pourrait promouvoir d'autres admins
+ * rendrait le role de proprietaire purement decoratif. Le role 'owner' n'est
+ * pas attribuable ici — il passe par transferOwnership, qui deplace aussi
+ * groups.owner_id.
+ */
+export const updateMemberRole = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = req.params.id;
+    const targetUserId = req.params.userId;
+    const userId = (req as any).user.id;
+    const { role } = req.body;
+
+    const group = await Group.findByPk(groupId);
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    if (group.ownerId !== userId) {
+      return res.status(403).json({ message: 'Only the group owner can change roles' });
+    }
+
+    if (targetUserId === userId) {
+      return res.status(400).json({
+        message: 'The owner cannot change their own role; transfer ownership instead',
+      });
+    }
+
+    const membership = await GroupMember.findOne({
+      where: { groupId, userId: targetUserId },
+    });
+
+    if (!membership) {
+      return res.status(404).json({ message: 'This user is not a member of this group' });
+    }
+
+    await membership.update({ role });
+
+    res.json({ userId: targetUserId, role: membership.role });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * G-03 / G-04 : transmettre la propriete du groupe.
+ *
+ * Sans cette route, leaveGroup etait un cul-de-sac : il exige du
+ * proprietaire qu'il transmette le groupe avant de partir, et rien ne
+ * permettait de le faire. Un proprietaire ne pouvait donc jamais quitter son
+ * propre groupe.
+ *
+ * Verrou sur la ligne groupe : deux transferts simultanes laisseraient
+ * groups.owner_id et group_members en desaccord.
+ */
+export const transferOwnership = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = req.params.id;
+    const userId = (req as any).user.id;
+    const { newOwnerId } = req.body;
+
+    const result = await sequelize.transaction(async (t) => {
+      const group = await Group.findByPk(groupId, { transaction: t, lock: t.LOCK.UPDATE });
+
+      if (!group) {
+        return { error: { code: 404, message: 'Group not found' } };
+      }
+
+      if (group.ownerId !== userId) {
+        return { error: { code: 403, message: 'Only the group owner can transfer ownership' } };
+      }
+
+      if (newOwnerId === userId) {
+        return { error: { code: 400, message: 'You already own this group' } };
+      }
+
+      const successor = await GroupMember.findOne({
+        where: { groupId, userId: newOwnerId },
+        transaction: t,
+      });
+
+      if (!successor) {
+        return { error: { code: 404, message: 'This user is not a member of this group' } };
+      }
+
+      const previous = await GroupMember.findOne({
+        where: { groupId, userId },
+        transaction: t,
+      });
+
+      await group.update({ ownerId: newOwnerId }, { transaction: t });
+      await successor.update({ role: 'owner' }, { transaction: t });
+
+      // L'ancien proprietaire reste admin : il garde de quoi administrer le
+      // groupe, et peut ensuite le quitter s'il le souhaite.
+      if (previous) {
+        await previous.update({ role: 'admin' }, { transaction: t });
+      }
+
+      return {};
+    });
+
+    if (result.error) {
+      return res.status(result.error.code).json({ message: result.error.message });
+    }
+
+    res.json({ message: 'Ownership transferred', ownerId: newOwnerId });
+  } catch (error) {
+    next(error);
+  }
+};

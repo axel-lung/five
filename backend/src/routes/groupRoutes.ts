@@ -15,11 +15,18 @@ import {
   acceptInvitation,
   listInvitations,
   revokeInvitation,
-  leaveGroup
+  leaveGroup,
+  updateMemberRole,
+  transferOwnership
 } from '../controllers/invitationController';
 import { authenticateToken } from '../middleware/auth';
 import { validateRequest } from '../middleware/validateRequest';
-import { createGroupSchema, createInvitationSchema } from '../utils/validationSchemas';
+import {
+  createGroupSchema,
+  createInvitationSchema,
+  updateMemberRoleSchema,
+  transferOwnershipSchema,
+} from '../utils/validationSchemas';
 import { createLimiter } from '../middleware/rateLimit';
 
 const router = Router();
@@ -48,6 +55,11 @@ router.post('/:id/members', addMember);
 router.delete('/:id/members', removeMember);
 router.get('/:id/members', getGroupMembers);
 router.post('/:id/leave', leaveGroup);
+
+// G-03 : roles et transmission du groupe. Sans transfer-ownership, leaveGroup
+// est un cul-de-sac pour le proprietaire.
+router.patch('/:id/members/:userId/role', validateRequest(updateMemberRoleSchema), updateMemberRole);
+router.post('/:id/transfer-ownership', validateRequest(transferOwnershipSchema), transferOwnership);
 
 // Invitations rattachees a un groupe
 router.post('/:id/invitations', createLimiter, validateRequest(createInvitationSchema), createInvitation);

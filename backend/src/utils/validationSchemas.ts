@@ -39,6 +39,7 @@ export const createGroupSchema = Joi.object({
   name: Joi.string().max(255).required(),
   description: Joi.string().max(1000).optional(),
   city: Joi.string().max(100).optional(),
+  avatarUrl: Joi.string().uri().optional(),
   accessType: Joi.string().valid('private', 'public').default('private'),
 });
 
@@ -86,4 +87,14 @@ export const updateNotificationPreferencesSchema = Joi.object({
   emailEnabled: Joi.boolean().optional(),
   quietHoursStart: Joi.number().integer().min(0).max(23).allow(null).optional(),
   quietHoursEnd: Joi.number().integer().min(0).max(23).allow(null).optional(),
+});
+
+// G-03 : changement de role. 'owner' est absent a dessein — il s'obtient par
+// transferOwnership, qui deplace aussi groups.owner_id.
+export const updateMemberRoleSchema = Joi.object({
+  role: Joi.string().valid('admin', 'member').required(),
+});
+
+export const transferOwnershipSchema = Joi.object({
+  newOwnerId: Joi.string().uuid().required(),
 });
