@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import api, { setSession } from '../services/api';
+import { Alert, Button, Field, inputClass, PageTitle } from '../components/ui';
 
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -10,213 +11,122 @@ const Register: React.FC = () => {
     lastName: '',
     phone: '',
     city: '',
-    // C-01 : consentements separes, les CGU sont obligatoires cote API.
+    // C-01 : consentements separes. Les CGU sont obligatoires cote API.
     acceptTos: false,
-    acceptMarketing: false
+    acceptMarketing: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const destination = (location.state as any)?.from?.pathname ?? '/dashboard';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    setFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setSuccess(null);
 
     try {
-      const response = await api.post('/auth/register', formData);
-      const { user, accessToken } = response.data;
-
-      // Store token and user info
-      localStorage.setItem('access_token', accessToken);
-      localStorage.setItem('user', JSON.stringify(user));
-
-      setSuccess('Compte créé avec succès ! Redirection en cours...');
-
-      // Redirect to dashboard after a short delay
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1500);
+      // Les champs facultatifs laisses vides sont retires plutot qu'envoyes
+      // a '' : Joi refuse une chaine vide la ou il attend un nom ou une
+      // ville. Les booleens des consentements traversent ce filtre.
+      const payload = Object.fromEntries(
+        Object.entries(formData).filter(([, value]) => value !== '')
+      );
+      const response = await api.post('/auth/register', payload);
+      const { user, accessToken, refreshToken } = response.data;
+      setSession(accessToken, refreshToken, user);
+      navigate(destination, { replace: true });
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed');
+      const data = err.response?.data;
+      setError(data?.details?.[0] ?? data?.message ?? 'Inscription impossible');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold">Créer un compte Five/Futsal</h2>
-          <p className="text-gray-600">
-            Rejoignez la communauté pour organiser et participer à des sessions de five
-          </p>
+    <div className="max-w-md mx-auto py-6">
+      <PageTitle subtitle="Deux minutes, et vous êtes sur la prochaine session.">
+        Créer un compte
+      </PageTitle>
+
+      {error && (
+        <div className="mb-4">
+          <Alert kind="error">{error}</Alert>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Email" name="email">
+          <input
+            id="email" type="email" name="email" autoComplete="email" required
+            value={formData.email} onChange={handleChange}
+            className={inputClass} disabled={loading}
+          />
+        </Field>
+
+        <Field label="Mot de passe" name="password" hint="6 caractères minimum.">
+          <input
+            id="password" type="password" name="password" autoComplete="new-password" required
+            minLength={6} value={formData.password} onChange={handleChange}
+            className={inputClass} disabled={loading}
+          />
+        </Field>
+
+        <Field label="Prénom" name="firstName">
+          <input
+            id="firstName" type="text" name="firstName" autoComplete="given-name"
+            value={formData.firstName} onChange={handleChange}
+            className={inputClass} disabled={loading}
+          />
+        </Field>
+
+        <Field label="Ville" name="city">
+          <input
+            id="city" type="text" name="city" autoComplete="address-level2"
+            value={formData.city} onChange={handleChange}
+            className={inputClass} disabled={loading}
+          />
+        </Field>
+
+        <div className="space-y-3 pt-2">
+          <label htmlFor="acceptTos" className="flex items-start gap-3 text-sm text-gray-700">
+            <input
+              id="acceptTos" type="checkbox" name="acceptTos" required
+              checked={formData.acceptTos} onChange={handleChange}
+              className="mt-1 h-5 w-5" disabled={loading}
+            />
+            <span>J'accepte les conditions générales d'utilisation.</span>
+          </label>
+
+          <label htmlFor="acceptMarketing" className="flex items-start gap-3 text-sm text-gray-700">
+            <input
+              id="acceptMarketing" type="checkbox" name="acceptMarketing"
+              checked={formData.acceptMarketing} onChange={handleChange}
+              className="mt-1 h-5 w-5" disabled={loading}
+            />
+            <span>Je souhaite recevoir les actualités de Five (facultatif).</span>
+          </label>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
+        <Button type="submit" disabled={loading || !formData.acceptTos} full>
+          {loading ? 'Création…' : "S'inscrire"}
+        </Button>
+      </form>
 
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded">
-            {success}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Mot de passe
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              minLength="6"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-              Prénom
-            </label>
-            <input
-              id="firstName"
-              type="text"
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-              Nom de famille
-            </label>
-            <input
-              id="lastName"
-              type="text"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-              Téléphone (optionnel)
-            </label>
-            <input
-              id="phone"
-              type="tel"
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-              Ville
-            </label>
-            <input
-              id="city"
-              type="text"
-              name="city"
-              value={formData.city}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
-
-          <div className="space-y-2 pt-2">
-            <label htmlFor="acceptTos" className="flex items-start gap-2 text-sm text-gray-700">
-              <input
-                id="acceptTos"
-                type="checkbox"
-                name="acceptTos"
-                checked={formData.acceptTos}
-                onChange={handleChange}
-                className="mt-1"
-                disabled={loading}
-                required
-              />
-              <span>J'accepte les conditions générales d'utilisation.</span>
-            </label>
-
-            <label htmlFor="acceptMarketing" className="flex items-start gap-2 text-sm text-gray-700">
-              <input
-                id="acceptMarketing"
-                type="checkbox"
-                name="acceptMarketing"
-                checked={formData.acceptMarketing}
-                onChange={handleChange}
-                className="mt-1"
-                disabled={loading}
-              />
-              <span>Je souhaite recevoir les actualités de Five (facultatif).</span>
-            </label>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading || !formData.acceptTos}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-md transition"
-          >
-            {loading ? 'Création...' : 'S\'inscrire'}
-          </button>
-        </form>
-
-        <div className="text-center text-sm">
-          <p className="text-gray-500">
-            Déjà un compte ?
-            <Link to="/login" className="text-blue-600 hover:text-blue-800 underline">
-              Connectez-vous ici
-            </Link>
-          </p>
-        </div>
-      </div>
+      <p className="text-center text-sm text-gray-600 mt-6">
+        Déjà un compte ?{' '}
+        <Link to="/login" className="text-green-700 font-semibold underline">
+          Se connecter
+        </Link>
+      </p>
     </div>
   );
 };

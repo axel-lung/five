@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Les pages utilisaient des classes Tailwind depuis le debut, mais Tailwind
+   n'avait jamais ete installe : aucune ne resolvait vers quoi que ce soit et
+   l'application s'affichait en HTML brut. */
+
+html {
+  /* Evite le zoom automatique de Safari iOS a la mise au point d'un champ,
+     qui casse la mise en page sur telephone. */
+  -webkit-text-size-adjust: 100%;
+}

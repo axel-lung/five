@@ -1,228 +1,146 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
+import { Alert, Button, Field, inputClass, PageTitle } from '../components/ui';
 
 const CreateEvent: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const [groups, setGroups] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     title: '',
-    description: '',
     dateTime: '',
     location: '',
-    capacity: 12,
-    level: '',
+    capacity: '10',
     price: '',
-    groupId: ''
+    description: '',
+    groupId: searchParams.get('groupId') ?? '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  useEffect(() => {
+    // On ne propose que les groupes dont on est membre : l'API refuse de
+    // creer un evenement dans le groupe d'un autre.
+    api
+      .get('/groups')
+      .then((res) => setGroups(res.data.filter((group: any) => group.isMember)))
+      .catch(() => setGroups([]));
+  }, []);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value === '' ? undefined : value
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setSuccess(null);
-
-    // Validate required fields
-    if (!formData.title || !formData.dateTime) {
-      setError('Le titre et la date/heure sont obligatoires');
-      setLoading(false);
-      return;
-    }
 
     try {
-      const response = await api.post('/events', formData);
-      setSuccess('Événement créé avec succès ! Redirection en cours...');
+      const payload: Record<string, unknown> = {
+        title: formData.title,
+        // datetime-local ne porte pas de fuseau ; le convertir en ISO evite
+        // qu'une session de 19 h soit enregistree a 18 h ou 20 h selon le
+        // fuseau du serveur.
+        dateTime: new Date(formData.dateTime).toISOString(),
+        capacity: Number(formData.capacity),
+      };
 
-      // Redirect to event detail after a short delay
-      setTimeout(() => {
-        navigate(`/dashboard/event/${response.data.id}`);
-      }, 1500);
+      if (formData.location) payload.location = formData.location;
+      if (formData.description) payload.description = formData.description;
+      if (formData.price) payload.price = Number(formData.price);
+      if (formData.groupId) payload.groupId = formData.groupId;
+
+      const response = await api.post('/events', payload);
+      navigate(`/events/${response.data.id}`, { replace: true });
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create event');
+      const data = err.response?.data;
+      setError(data?.details?.[0] ?? data?.message ?? 'Création impossible');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">Créer un nouvel événement</h1>
-          <p className="text-gray-600">
-            Organisez votre session de five et invitez vos amis
-          </p>
+    <div className="max-w-md mx-auto">
+      <PageTitle subtitle="Date, lieu, nombre de places. Le reste suit.">
+        Créer une session
+      </PageTitle>
+
+      {error && (
+        <div className="mb-4">
+          <Alert kind="error">{error}</Alert>
         </div>
+      )}
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Titre" name="title">
+          <input
+            id="title" type="text" name="title" required
+            value={formData.title} onChange={handleChange}
+            className={inputClass} disabled={loading}
+            placeholder="Five du mardi"
+          />
+        </Field>
 
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded mb-4">
-            {success}
-          </div>
-        )}
+        <Field label="Date et heure" name="dateTime">
+          <input
+            id="dateTime" type="datetime-local" name="dateTime" required
+            value={formData.dateTime} onChange={handleChange}
+            className={inputClass} disabled={loading}
+          />
+        </Field>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-              Titre de l'événement *
-            </label>
-            <input
-              id="title"
-              type="text"
-              required
-              name="title"
-              value={formData.title || ''}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
+        <Field label="Lieu" name="location">
+          <input
+            id="location" type="text" name="location"
+            value={formData.location} onChange={handleChange}
+            className={inputClass} disabled={loading}
+            placeholder="Le Five Reims"
+          />
+        </Field>
 
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-              Description (optionnelle)
-            </label>
-            <textarea
-              id="description"
-              rows="4"
-              name="description"
-              value={formData.description || ''}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
+        <Field label="Nombre de places" name="capacity" hint="Au-delà, les joueurs passent en liste d'attente.">
+          <input
+            id="capacity" type="number" name="capacity" required min={1} max={50}
+            value={formData.capacity} onChange={handleChange}
+            className={inputClass} disabled={loading}
+          />
+        </Field>
 
-          <div>
-            <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 mb-1">
-              Date et heure *
-            </label>
-            <input
-              id="dateTime"
-              type="datetime-local"
-              required
-              name="dateTime"
-              value={formData.dateTime || ''}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
+        <Field label="Prix indicatif (€)" name="price" hint="Le paiement en ligne arrive en V1.5.">
+          <input
+            id="price" type="number" name="price" min={0} step="0.5"
+            value={formData.price} onChange={handleChange}
+            className={inputClass} disabled={loading}
+          />
+        </Field>
 
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-              Lieu
-            </label>
-            <input
-              id="location"
-              type="text"
-              name="location"
-              value={formData.location || ''}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
-
-          <div className="flex gap-4">
-            <div>
-              <label htmlFor="capacity" className="block text-sm font-medium text-gray-700 mb-1">
-                Capacité
-              </label>
-              <input
-                id="capacity"
-                type="number"
-                min="1"
-                max="50"
-                value={formData.capacity || 12}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <label htmlFor="level" className="block text-sm font-medium text-gray-700 mb-1">
-                Niveau
-              </label>
-              <input
-                id="level"
-                type="text"
-                name="level"
-                value={formData.level || ''}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <div>
-              <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
-                Prix (€)
-              </label>
-              <input
-                id="price"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.price || ''}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <label htmlFor="groupId" className="block text-sm font-medium text-gray-700 mb-1">
-                Groupe associé (optionnel)
-              </label>
-              <input
-                id="groupId"
-                type="text"
-                name="groupId"
-                value={formData.groupId || ''}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-md transition"
+        {groups.length > 0 && (
+          <Field label="Groupe" name="groupId" hint="Une session de groupe n'est visible que de ses membres.">
+            <select
+              id="groupId" name="groupId"
+              value={formData.groupId} onChange={handleChange}
+              className={inputClass} disabled={loading}
             >
-              {loading ? 'Création...' : 'Créer l\'événement'}
-            </button>
-          </div>
-        </form>
+              <option value="">Sans groupe</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
 
-        <div className="mt-8 text-center">
-          <Link
-            to="/dashboard"
-            className="text-gray-600 hover:text-gray-800"
-          >
-            Retour au tableau de bord
-          </Link>
-        </div>
-      </div>
+        <Button type="submit" disabled={loading} full>
+          {loading ? 'Création…' : 'Créer la session'}
+        </Button>
+      </form>
     </div>
   );
 };

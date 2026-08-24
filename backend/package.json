@@ -9,7 +9,8 @@
     "build": "tsc",
     "migrate": "node dist/db/migrator.js",
     "test": "jest",
-    "make-admin": "ts-node src/scripts/makeAdmin.ts"
+    "make-admin": "ts-node src/scripts/makeAdmin.ts",
+    "dev:local": "ts-node --transpile-only devserver.ts"
   },
   "keywords": [
     "five",
