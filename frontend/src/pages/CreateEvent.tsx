@@ -56,7 +56,7 @@ const CreateEvent: React.FC = () => {
       if (formData.groupId) payload.groupId = formData.groupId;
 
       const response = await api.post('/events', payload);
-      navigate(`/events/${response.data.id}`, { replace: true });
+      navigate(`/sessions/${response.data.id}`, { replace: true });
     } catch (err: any) {
       const data = err.response?.data;
       setError(data?.details?.[0] ?? data?.message ?? 'Création impossible');

@@ -5,11 +5,24 @@ import { env } from '../config/env';
 /**
  * S-05 : limites de debit.
  *
- * Neutralise en test : la suite cree des dizaines de comptes en boucle
- * (test/helpers.ts) et deviendrait rouge par intermittence.
+ * Neutralise dans deux cas, jamais en production :
+ *
+ * - en test, ou la suite cree des dizaines de comptes en boucle
+ *   (test/helpers.ts) et deviendrait rouge par intermittence ;
+ * - sur demande explicite via DISABLE_RATE_LIMIT, pour les parcours
+ *   navigateur, qui creent eux aussi de nombreux comptes contre un serveur
+ *   de developpement.
+ *
+ * La garde sur `nodeEnv` est volontairement redondante : une variable
+ * d'environnement mal placee ne doit pas pouvoir desarmer la protection
+ * anti-brute-force d'un serveur de production.
  */
+const disabled =
+  env.nodeEnv === 'test' ||
+  (env.nodeEnv !== 'production' && process.env.DISABLE_RATE_LIMIT === '1');
+
 const limiter = (windowMs: number, max: number, message: string) => {
-  if (env.nodeEnv === 'test') {
+  if (disabled) {
     return (req: Request, res: Response, next: NextFunction) => next();
   }
 

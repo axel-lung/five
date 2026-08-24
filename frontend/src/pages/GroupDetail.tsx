@@ -84,7 +84,7 @@ const GroupDetail: React.FC = () => {
 
       <div className="mb-6">
         <Link
-          to={`/events/new?groupId=${group.id}`}
+          to={`/sessions/nouvelle?groupId=${group.id}`}
           className="min-h-[44px] flex items-center justify-center rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition"
         >
           Créer une session pour ce groupe

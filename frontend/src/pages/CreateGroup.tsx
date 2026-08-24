@@ -33,7 +33,7 @@ const CreateGroup: React.FC = () => {
         Object.entries(formData).filter(([, value]) => value !== '')
       );
       const response = await api.post('/groups', payload);
-      navigate(`/groups/${response.data.id}`, { replace: true });
+      navigate(`/groupes/${response.data.id}`, { replace: true });
     } catch (err: any) {
       const data = err.response?.data;
       setError(data?.details?.[0] ?? data?.message ?? 'Création impossible');

@@ -43,7 +43,7 @@ const JoinGroup: React.FC = () => {
 
     try {
       const response = await api.post(`/groups/invitations/${token}/accept`);
-      navigate(`/groups/${response.data.groupId}`, { replace: true });
+      navigate(`/groupes/${response.data.groupId}`, { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.message ?? 'Impossible de rejoindre ce groupe');
       setJoining(false);

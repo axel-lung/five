@@ -45,13 +45,13 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
         <Link
-          to="/events/new"
+          to="/sessions/nouvelle"
           className="min-h-[44px] flex items-center justify-center rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition"
         >
           Créer une session
         </Link>
         <Link
-          to="/groups/new"
+          to="/groupes/nouveau"
           className="min-h-[44px] flex items-center justify-center rounded-lg bg-white border border-gray-300 hover:bg-gray-50 font-semibold transition"
         >
           Créer un groupe
@@ -64,7 +64,7 @@ const Dashboard: React.FC = () => {
           <Card>
             <p className="text-gray-600">
               Aucune session à venir.{' '}
-              <Link to="/events/new" className="text-green-700 underline font-medium">
+              <Link to="/sessions/nouvelle" className="text-green-700 underline font-medium">
                 Créez la première
               </Link>
               .
@@ -73,7 +73,7 @@ const Dashboard: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {events.map((event) => (
-              <Link key={event.id} to={`/events/${event.id}`} className="block">
+              <Link key={event.id} to={`/sessions/${event.id}`} className="block">
                 <Card className="hover:border-green-400 transition">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -98,7 +98,7 @@ const Dashboard: React.FC = () => {
           <Card>
             <p className="text-gray-600">
               Vous n'êtes dans aucun groupe.{' '}
-              <Link to="/groups/new" className="text-green-700 underline font-medium">
+              <Link to="/groupes/nouveau" className="text-green-700 underline font-medium">
                 Créez le vôtre
               </Link>
               .
@@ -107,7 +107,7 @@ const Dashboard: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {groups.map((group) => (
-              <Link key={group.id} to={`/groups/${group.id}`} className="block">
+              <Link key={group.id} to={`/groupes/${group.id}`} className="block">
                 <Card className="hover:border-green-400 transition">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">

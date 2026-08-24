@@ -82,7 +82,7 @@ const SharedEvent: React.FC = () => {
 
       {connected ? (
         <Link
-          to={`/events/${event.id}`}
+          to={`/sessions/${event.id}`}
           className="min-h-[44px] flex items-center justify-center rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition"
         >
           Voir la session et m'inscrire
@@ -91,14 +91,14 @@ const SharedEvent: React.FC = () => {
         <div className="space-y-3">
           <Link
             to="/register"
-            state={{ from: { pathname: `/events/${event.id}` } }}
+            state={{ from: { pathname: `/sessions/${event.id}` } }}
             className="min-h-[44px] flex items-center justify-center rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition"
           >
             Créer un compte pour participer
           </Link>
           <Link
             to="/login"
-            state={{ from: { pathname: `/events/${event.id}` } }}
+            state={{ from: { pathname: `/sessions/${event.id}` } }}
             className="min-h-[44px] flex items-center justify-center rounded-lg bg-white border border-gray-300 hover:bg-gray-50 font-semibold transition"
           >
             J'ai déjà un compte

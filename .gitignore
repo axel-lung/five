@@ -54,3 +54,6 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
