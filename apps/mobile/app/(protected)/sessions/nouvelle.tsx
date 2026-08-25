@@ -1,11 +1,250 @@
-import React from 'react';
-import ComingSoon from '../../../components/ComingSoon';
+import React, { useEffect, useState } from 'react';
+import { Text, View, ScrollView } from 'react-native';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { api, useCurrentUser } from 'five-api-client';
+import {
+  Alert,
+  Button,
+  Field,
+  Input,
+  Loading,
+  PageTitle,
+  Select,
+} from 'five-ui';
+import Screen from '../../../components/Screen';
 
-// TODO Phase 2 : portage de frontend/src/pages/CreateEvent.tsx
 export default function CreateEvent() {
+  const [searchParams] = useLocalSearchParams<{ groupId?: string }>();
+  const router = useRouter();
+  const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([]);
+  const [venues, setVenues] = useState<Array<{ id: string; name: string; city?: string }>>([]);
+  const [formData, setFormData] = useState({
+    title: '',
+    dateTime: '',
+    location: '',
+    capacity: '10',
+    price: '',
+    description: '',
+    venueId: '',
+    groupId: searchParams.groupId ?? '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const me = useCurrentUser();
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        // Fetch groups where user is a member
+        const groupsRes = await api.get('/groups');
+        const userGroups = groupsRes.data
+          .filter((group: any) => group.isMember)
+          .map((group: any) => ({
+            id: group.id,
+            name: group.name,
+          }));
+        setGroups(userGroups);
+
+        // Fetch venues
+        const venuesRes = await api.get('/venues');
+        const formattedVenues = venuesRes.data.map((venue: any) => ({
+          id: venue.id,
+          name: venue.name,
+          city: venue.city,
+        }));
+        setVenues(formattedVenues);
+      } catch (err: any) {
+        setError(
+          err.response?.data?.message ??
+            'Impossible de charger les données initiales'
+        );
+      }
+    };
+
+    loadInitialData();
+  }, []);
+
+  const handleChange = (
+    field: keyof typeof formData,
+    value: string
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (error) setError(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+
+    // Basic validation
+    if (!formData.title.trim()) {
+      setError('Le titre est requis');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.dateTime) {
+      setError('La date et l\'heure sont requises');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const payload: Record<string, unknown> = {
+        title: formData.title.trim(),
+        dateTime: new Date(formData.dateTime).toISOString(),
+        capacity: Number(formData.capacity),
+      };
+
+      if (formData.location.trim()) payload.location = formData.location.trim();
+      if (formData.description.trim()) payload.description = formData.description.trim();
+      if (formData.price) payload.price = Number(formData.price);
+      if (formData.groupId) payload.groupId = formData.groupId;
+      if (formData.venueId) payload.venueId = formData.venueId;
+
+      const response = await api.post('/events', payload);
+      setNotice('Session créée avec succès !');
+
+      // Navigate to the event detail screen
+      router.replace(`/sessions/${response.data.id}`);
+    } catch (err: any) {
+      const data = err.response?.data;
+      setError(
+        data?.details?.[0] ?? data?.message ?? 'Création impossible'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && !notice) return <Loading />;
+
   return (
-    <ComingSoon title="Créer une session">
-      La création de session se fait pour l'instant depuis la version web.
-    </ComingSoon>
+    <ScrollView
+      contentContainerClassName="px-4 py-6"
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <PageTitle subtitle="Date, lieu, nombre de places. Le reste suit.">
+        Créer une session
+      </PageTitle>
+
+      {error ? (
+        <View className="mb-4">
+          <Alert kind="error">{error}</Alert>
+        </View>
+      ) : null}
+
+      {notice ? (
+        <View className="mb-4">
+          <Alert kind="success">{notice}</Alert>
+        </View>
+      ) : null}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Titre" hint="Ex: Five du mardi">
+          <Input
+            testID="create-event-title"
+            value={formData.title}
+            onChangeText={(value) => handleChange('title', value)}
+            editable={!loading}
+            placeholder="Five du mardi"
+          />
+        </Field>
+
+        <Field label="Date et heure">
+          {/* Using Input for datetime - in a real app, you might want a proper datetime picker */}
+          <Input
+            testID="create-event-datetime"
+            value={formData.dateTime}
+            onChangeText={(value) => handleChange('dateTime', value)}
+            editable={!loading}
+            placeholder="2026-08-27 19:30"
+          />
+        </Field>
+
+        <Field label="Lieu" hint="Adresse ou nom du lieu">
+          <Input
+            testID="create-event-location"
+            value={formData.location}
+            onChangeText={(value) => handleChange('location', value)}
+            editable={!loading}
+            placeholder="Le Five Reims"
+          />
+        </Field>
+
+        {venues.length > 0 && (
+          <Field label="Complexe" hint="Facultatif. Laissez vide pour un lieu libre.">
+            <Select
+              testID="create-event-venue"
+              value={formData.venueId}
+              options={venues.map((venue) => ({
+                value: venue.id,
+                label: venue.city ? `${venue.name} — ${venue.city}` : venue.name,
+              }))}
+              onChange={(value) => handleChange('venueId', value)}
+              placeholder="Aucun"
+              disabled={loading}
+            />
+          </Field>
+        )}
+
+        <Field label="Nombre de places" hint="Au-delà, les joueurs passent en liste d'attente.">
+          <Input
+            testID="create-event-capacity"
+            value={formData.capacity}
+            onChangeText={(value) => handleChange('capacity', value)}
+            editable={!loading}
+            keyboardType="number"
+            placeholder="10"
+          />
+        </Field>
+
+        <Field label="Prix indicatif (€)" hint="Le paiement en ligne arrive en V1.5.">
+          <Input
+            testID="create-event-price"
+            value={formData.price}
+            onChangeText={(value) => handleChange('price', value)}
+            editable={!loading}
+            keyboardType="decimal-pad"
+            placeholder="0"
+          />
+        </Field>
+
+        {groups.length > 0 && (
+          <Field label="Groupe" hint="Une session de groupe n'est visible que de ses membres.">
+            <Select
+              testID="create-event-group"
+              value={formData.groupId}
+              options={groups.map((group) => ({
+                value: group.id,
+                label: group.name,
+              }))}
+              onChange={(value) => handleChange('groupId', value)}
+              placeholder="Sans groupe"
+              disabled={loading}
+            />
+          </Field>
+        )}
+
+        <View className="space-y-3">
+          <Button
+            testID="create-event-submit"
+            onPress={handleSubmit}
+            disabled={loading}
+            full
+          >
+            {loading ? 'Création…' : 'Créer la session'}
+          </Button>
+
+          {/* Optional: Clear notice when user interacts */}
+          {/* Not implemented to keep it simple */}
+        </View>
+      </form>
+    </ScrollView>
   );
 }

@@ -11,6 +11,7 @@ import {
   PageTitle,
   StatusBadge,
 } from 'five-ui';
+import ShareButton from '../../../components/ShareButton';
 import Screen from '../../../components/Screen';
 
 /**
@@ -235,7 +236,15 @@ export default function EventDetail() {
         </View>
       ) : null}
 
-      {/* TODO Phase 2 : partage du lien (S-03 / E-07), via ShareButton. */}
+      {/* S-03 : le lien partageable se consulte sans compte (E-07). */}
+      {event.shareableLinkToken && (
+        <View className="mb-4">
+          <ShareButton
+            url={`/e/${event.shareableLinkToken}`}
+            text={`${event.title} — ${formatDateTime(event.dateTime)}`}
+          />
+        </View>
+      )}
 
       <View className="mb-4">
         <Text className="text-lg font-bold text-gray-900 mb-3">

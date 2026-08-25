@@ -79,7 +79,8 @@ export default function ProtectedLayout() {
 
       <BottomNav unread={unread} isAdmin={profile?.role === 'admin'} />
 
-      {/* TODO Phase 2 : BugReportButton, joignable depuis n'importe quel ecran. */}
+      {/* BugReportButton : déclaration d'anomalie depuis n'importe quel écran */}
+      <BugReportButton />
     </View>
   );
 }
