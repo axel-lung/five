@@ -36,7 +36,8 @@
     "@babel/core": "^7.25.2",
     "@types/react": "~18.3.12",
     "tailwindcss": "^3.4.17",
-    "typescript": "~5.3.3"
+    "typescript": "~5.3.3",
+    "@playwright/test": "^1.62.1"
   },
   "scripts": {
     "start": "expo start",
@@ -44,6 +45,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:web": "expo export --platform web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "e2e": "playwright test"
   }
 }

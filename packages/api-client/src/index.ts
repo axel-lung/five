@@ -8,6 +8,7 @@ export {
   setOnSessionExpired,
 } from './client';
 export { mediaSrc } from './media';
+export { publicUrl } from './publicUrl';
 export {
   createChatSocket,
   CHAT_SOCKET_PATH,

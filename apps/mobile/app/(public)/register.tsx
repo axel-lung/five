@@ -90,6 +90,7 @@ export default function Register() {
         <Field label="Prénom">
           <Input
             autoComplete="given-name"
+            testID="register-firstName"
             value={formData.firstName}
             onChangeText={(value) => set({ firstName: value })}
             editable={!loading}
