@@ -204,8 +204,7 @@ export const BugReportButton: React.FC = () => {
               </View>
             </View>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );

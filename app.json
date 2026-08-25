@@ -1,0 +1,8 @@
+{
+  "android": {
+    "package": "com.anonymous.five"
+  },
+  "ios": {
+    "bundleIdentifier": "com.anonymous.five"
+  }
+}
