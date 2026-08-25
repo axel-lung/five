@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { Link, Redirect, Tabs, usePathname } from 'expo-router';
 import { api, useHasSession, useProfile } from 'five-api-client';
 import { eventBus, Loading } from 'five-ui';
+import BugReportButton from '../../components/BugReportButton';
 import BottomNav from '../../components/BottomNav';
 import { shellMainClass } from '../../components/navShell';
 import { SHELL_BACKGROUND } from '../../components/theme';
@@ -75,12 +76,11 @@ export default function ProtectedLayout() {
             sceneStyle: { backgroundColor: SHELL_BACKGROUND },
           }}
         />
+        {/* Bug report button - floating action button */}
+        <BugReportButton />
       </View>
 
       <BottomNav unread={unread} isAdmin={profile?.role === 'admin'} />
-
-      {/* BugReportButton : déclaration d'anomalie depuis n'importe quel écran */}
-      <BugReportButton />
     </View>
   );
 }

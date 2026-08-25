@@ -44,7 +44,7 @@ export const BugReportButton: React.FC = () => {
   // Mettre à jour l'URL du contexte quand elle change
   useEffect(() => {
     // Pour ce MVP, nous utilisons une valeur placeholder
-    # Dans une implémentation réelle, nous obtiendrions l'URL depuis le système de navigation
+    // Dans une implémentation réelle, nous obtiendrions l'URL depuis le système de navigation
     contextUrlRef.current = '/unknown';
   }, []);
 
@@ -150,9 +150,9 @@ export const BugReportButton: React.FC = () => {
                 <Field label="Type">
                   <Select
                     value={kind}
-                    options={KINDS.map(kind => ({
-                      value: kind.value,
-                      label: kind.label,
+                    options={KINDS.map(k => ({
+                      value: k.value,
+                      label: k.label,
                     }))}
                     onChange={setKind}
                     placeholder="Sélectionner un type"
@@ -162,9 +162,9 @@ export const BugReportButton: React.FC = () => {
                 <Field label="Gravité">
                   <Select
                     value={severity}
-                    options={SEVERITIES.map(sev => ({
-                      value: sev.value,
-                      label: sev.label,
+                    options={SEVERITIES.map(s => ({
+                      value: s.value,
+                      label: s.label,
                     }))}
                     onChange={setSeverity}
                     placeholder="Sélectionner une gravité"
