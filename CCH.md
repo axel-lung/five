@@ -665,15 +665,15 @@ Accessibilité
 Contrastes, tailles, labels, navigation clavier web et lecteurs d’écran sur actions principales.
 Audit manuel + tests automatisés.
 Sécurité
-RLS Supabase stricte, secrets côté serveur, rate limiting, journaux d’accès, sauvegardes.
+Autorisation vérifiée côté serveur dans chaque contrôleur (pas de RLS : la base n’est jamais jointe directement par un client), secrets côté serveur, rate limiting, journaux d’accès, sauvegardes.
 Tests d’autorisation par rôle et revue de dépendances.
 Paiements
 Ne jamais stocker les cartes ; webhooks idempotents ; états transactionnels explicites.
 Tests Stripe en mode test, rejouabilité et rapprochement.
 
 2.4 Architecture technique proposée
-Client : React Native / Expo pour mutualiser iOS, Android et une partie web. Backend : Supabase avec Postgres, Auth, Storage, Realtime et Row Level Security (RLS). Paiements : Stripe Connect pour les flux liés aux partenaires et événements ; RevenueCat pour l’abonnement Pass Leader. Opérations : Resend pour les emails, Sentry pour les erreurs, PostHog pour l’analytics produit, Vercel pour le web et Expo EAS pour les builds et distributions.
-Décision d’architecture : conserver les règles métier sensibles (confirmation, remboursement, libération de place) dans des fonctions serveur transactionnelles et idempotentes. Realtime sert à l’actualisation d’interface, jamais à remplacer la source de vérité Postgres. Les images de cartes peuvent être rendues côté client pour le partage, avec une version serveur si la qualité ou la modération l’exige.
+Client : React Native / Expo pour mutualiser iOS, Android et une partie web. Backend : auto-hébergé, sur notre propre serveur — une API Express en TypeScript, PostgreSQL, authentification JWT maison, MinIO pour les fichiers, et un serveur WebSocket pour le temps réel, le tout en conteneurs derrière le Traefik déjà en place. Aucun fournisseur de backend-as-a-service : nous possédons la base, les données et les migrations, sans plafond d’usage ni facture à l’échelle. La contrepartie est assumée : sauvegardes, montée de version et supervision sont à notre charge. Paiements : Stripe Connect pour les flux liés aux partenaires et événements ; RevenueCat pour l’abonnement Pass Leader. Opérations : Resend pour les emails, Sentry pour les erreurs, PostHog pour l’analytics produit, et Expo EAS pour les builds et distributions mobiles ; le web est servi par le même serveur que l’API.
+Décision d’architecture : conserver les règles métier sensibles (confirmation, remboursement, libération de place) dans des fonctions serveur transactionnelles et idempotentes. Le temps réel sert à l’actualisation d’interface, jamais à remplacer la source de vérité Postgres : une socket n’est pas une file durable, et le client se rattrape après chaque coupure en redemandant le delta à l’API. Les images de cartes peuvent être rendues côté client pour le partage, avec une version serveur si la qualité ou la modération l’exige.
 2.5 Roadmap V0 → V4
 Version
 Objectif
@@ -802,16 +802,16 @@ Registrar
 25–40 €
 Annuelle
 Prévoir renouvellement et DNS.
-Supabase Pro
-Supabase
-0 → 25 $/mois
+Serveur (VPS)
+Auto-hébergement
+Coût déjà engagé
 Mensuelle
-Commencer au gratuit ; surveiller stockage et logs.
-Vercel
-Vercel
-0 → 20 $/mois
+Mutualisé avec d’autres projets derrière le même Traefik ; héberge l’API, PostgreSQL, MinIO et le web. À réévaluer si le stockage d’images ou le trafic augmentent.
+Sauvegardes hors site
+À choisir
+0 → 10 €/mois
 Mensuelle
-Hébergement web et previews.
+Contrepartie de l’auto-hébergement : la base et les médias nous appartiennent, donc leur sauvegarde aussi.
 Expo EAS
 Expo
 0 → 19 $/mois
@@ -975,7 +975,7 @@ FiveComposer : cartes joueur, terrain visuel, équipes équilibrées et partagea
 Modèle
 Freemium, frais de service, Pass Leader 4,99 €/mois, commission partenaires comme levier principal.
 Stack
-React Native / Expo ; Supabase ; Stripe Connect ; RevenueCat ; Resend ; Sentry ; PostHog ; Vercel ; Expo EAS.
+React Native / Expo ; API Express + PostgreSQL + MinIO auto-hébergés (Docker derrière Traefik) ; Stripe Connect ; RevenueCat ; Resend ; Sentry ; PostHog ; Expo EAS.
 Charge dev
 Référence ~110 j/h avec Opus 5 contre ~208 j/h sans ; V1.5 avec FiveComposer simple ~89 j/h.
 Budget an 1
