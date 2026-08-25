@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import api from '../services/api';
+import { Link, useNavigate } from 'react-router-dom';
+import api, { clearSession } from '../services/api';
 import { Profile as ProfileType } from '../services/session';
 import AvatarUpload from '../components/AvatarUpload';
 import { Alert, Button, Card, Field, inputClass, Loading, PageTitle } from '../components/ui';
@@ -17,6 +17,7 @@ const SLOTS = [
 ];
 
 const Profile: React.FC = () => {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileType | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,6 +78,11 @@ const Profile: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const logout = () => {
+    clearSession();
+    navigate('/', { replace: true });
   };
 
   const requestVerification = async () => {
@@ -241,6 +247,10 @@ const Profile: React.FC = () => {
         <Link to="/profil/donnees" className="text-sm text-gray-600 underline">
           Mes données et mon compte
         </Link>
+
+        <Button type="button" variant="secondary" onClick={logout} full className="mt-3">
+          Se déconnecter
+        </Button>
       </div>
     </div>
   );

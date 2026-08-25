@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Link } from 'expo-router';
-import { api, mediaSrc, setStoredUser, type Profile as ProfileType } from 'five-api-client';
+import { Link, useRouter } from 'expo-router';
+import {
+  api,
+  clearSession,
+  mediaSrc,
+  setStoredUser,
+  type Profile as ProfileType,
+} from 'five-api-client';
 import {
   Alert,
   Avatar,
@@ -32,6 +38,7 @@ const LEVELS = [
 ];
 
 export default function Profile() {
+  const router = useRouter();
   const [profile, setProfile] = useState<ProfileType | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -96,6 +103,14 @@ export default function Profile() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const logout = async () => {
+    // Attendu : le coffre natif est asynchrone, et le garde de session lit le
+    // jeton des le rendu suivant. Sans ca, il peut encore le trouver et
+    // renvoyer vers la zone protegee.
+    await clearSession();
+    router.replace('/');
   };
 
   const requestVerification = async () => {
@@ -254,6 +269,12 @@ export default function Profile() {
         <Link href="/profil/donnees" className="text-sm text-gray-600 underline">
           Mes données et mon compte
         </Link>
+
+        <View className="mt-3">
+          <Button testID="logout" variant="secondary" onPress={logout} full>
+            Se déconnecter
+          </Button>
+        </View>
       </View>
     </Screen>
   );
