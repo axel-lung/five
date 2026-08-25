@@ -21,6 +21,10 @@ on:
           - arm64-v8a
           - arm64-v8a,armeabi-v7a
           - armeabi-v7a,arm64-v8a,x86,x86_64
+      new_architecture:
+        description: "New Architecture (decocher pour comparer si l'affichage se fige)"
+        type: boolean
+        default: true
 
 jobs:
   build:
@@ -61,13 +65,20 @@ jobs:
         # une installation casserait la remontee des workspaces.
         run: npx expo prebuild --platform android --no-install
 
+      # -PnewArchEnabled surcharge la valeur que prebuild a tiree de app.json,
+      # sans toucher a la configuration du depot : de quoi comparer deux APK
+      # sur la seule variable de l'architecture.
       - name: Compiler l'APK
         working-directory: apps/mobile/android
-        run: ./gradlew assembleRelease -PreactNativeArchitectures=${{ inputs.architectures }} --no-daemon
+        run: |
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=${{ inputs.architectures }} \
+            -PnewArchEnabled=${{ inputs.new_architecture }} \
+            --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
-          name: five-apk-${{ github.run_number }}
+          name: five-apk-${{ github.run_number }}-newarch-${{ inputs.new_architecture }}
           path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 14
           if-no-files-found: error
@@ -83,9 +94,10 @@ jobs:
             echo "|---|---|"
             echo "| API | \`${{ inputs.api_url }}\` |"
             echo "| ABI | \`${{ inputs.architectures }}\` |"
+            echo "| New Architecture | \`${{ inputs.new_architecture }}\` |"
             echo "| Commit | \`${{ github.sha }}\` |"
             echo ""
-            echo "Telecharger \`five-apk-${{ github.run_number }}\` ci-dessous, dezipper, transferer l'APK sur le telephone."
+            echo "Telecharger l'artefact ci-dessous, dezipper, transferer l'APK sur le telephone."
             echo ""
             echo "> Signe avec la cle de debug du gabarit Expo : bon pour tester, a ne pas publier."
           } >> "$GITHUB_STEP_SUMMARY"
