@@ -12,7 +12,8 @@ export type NotificationType =
   | 'event.updated'
   | 'event.cancelled'
   | 'event.spot_released'
-  | 'event.reminder';
+  | 'event.reminder'
+  | 'event.ownership_transferred';
 
 /**
  * Ecrit une notification.

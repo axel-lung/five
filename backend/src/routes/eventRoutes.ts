@@ -11,7 +11,9 @@ import {
   getEventParticipants,
   getSharedEvent,
   remindEvent,
-  duplicateEvent
+  duplicateEvent,
+  transferEventOwnership,
+  withdrawFromEvent
 } from '../controllers/eventController';
 import { authenticateToken } from '../middleware/auth';
 import { validateRequest } from '../middleware/validateRequest';
@@ -19,6 +21,8 @@ import {
   createEventSchema,
   updateEventStatusSchema,
   duplicateEventSchema,
+  leaveEventSchema,
+  transferEventOwnershipSchema,
 } from '../utils/validationSchemas';
 import { createLimiter } from '../middleware/rateLimit';
 
@@ -41,8 +45,20 @@ router.delete('/:id', deleteEvent);
 
 // Participation routes
 router.post('/:id/join', joinEvent);
-router.post('/:id/leave', leaveEvent);
+router.post('/:id/leave', validateRequest(leaveEventSchema), leaveEvent);
+// E-03 : rendre sa place en gardant l'organisation. Distinct de /leave, qui
+// pour un organisateur signifie abandonner la session.
+router.post('/:id/withdraw', withdrawFromEvent);
 router.get('/:id/participants', getEventParticipants);
+
+// E-02 : transmission de l'organisation. Sans elle, leaveEvent serait un
+// cul-de-sac pour l'organisateur, comme leaveGroup l'etait pour un
+// proprietaire de groupe.
+router.post(
+  '/:id/transfer-ownership',
+  validateRequest(transferEventOwnershipSchema),
+  transferEventOwnership
+);
 
 // N-03 : relance des non-repondants, plafonnee cote controleur.
 router.post('/:id/remind', remindEvent);

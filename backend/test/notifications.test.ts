@@ -44,6 +44,25 @@ describe('Emission des notifications (N-01)', () => {
     expect(res.body.notifications).toHaveLength(0);
   });
 
+  // Devenir organisateur sans l-apprendre reviendrait a laisser la session
+  // sans personne pour s-en occuper — exactement ce que la transmission evite.
+  it('previent le joueur qui herite de l-organisation', async () => {
+    const organizer = await createUser();
+    const player = await createUser();
+    const event = await createEvent(organizer.accessToken);
+    await join(player.accessToken, event.id);
+
+    await api()
+      .post(`/api/events/${event.id}/leave`)
+      .set(authed(organizer.accessToken))
+      .send({ newOrganizerId: player.id });
+
+    const res = await inbox(player.accessToken);
+    expect(res.body.notifications.map((n: any) => n.type)).toContain(
+      'event.ownership_transferred'
+    );
+  });
+
   it('previent les inscrits d-une annulation', async () => {
     const organizer = await createUser();
     const player = await createUser();

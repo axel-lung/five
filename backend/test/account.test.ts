@@ -164,7 +164,10 @@ describe('Suppression de compte (C-06)', () => {
     expect(res.body.participants).toHaveLength(1);
   });
 
-  it('annule les evenements a venir qu-il organisait', async () => {
+  // Meme regle qu-un depart volontaire : la session survit a son organisateur
+  // tant qu-il reste quelqu-un pour la reprendre. L-annuler priverait les
+  // inscrits d-un creneau qu-ils ont deja reserve.
+  it('legue les evenements a venir qu-il organisait au premier inscrit', async () => {
     const organizer = await createUser();
     const player = await createUser();
     const event = await createEvent(organizer.accessToken);
@@ -173,6 +176,18 @@ describe('Suppression de compte (C-06)', () => {
     await deleteAccount(organizer.accessToken);
 
     const res = await api().get(`/api/events/${event.id}`).set(authed(player.accessToken));
+    expect(res.body.status).toBe('open');
+    expect(res.body.organizerId).toBe(player.id);
+  });
+
+  it('annule les evenements a venir que personne ne peut reprendre', async () => {
+    const organizer = await createUser();
+    const witness = await createUser();
+    const event = await createEvent(organizer.accessToken);
+
+    await deleteAccount(organizer.accessToken);
+
+    const res = await api().get(`/api/events/${event.id}`).set(authed(witness.accessToken));
     expect(res.body.status).toBe('cancelled');
   });
 

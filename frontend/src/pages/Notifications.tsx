@@ -16,6 +16,7 @@ const LABELS: Record<string, (payload: any) => string> = {
   'event.cancelled': (p) => `${p.title} a été annulée`,
   'event.spot_released': (p) => `Une place s'est libérée pour ${p.title} — vous êtes confirmé`,
   'event.reminder': (p) => `${p.title} : l'organisateur attend votre réponse`,
+  'event.ownership_transferred': (p) => `Vous organisez désormais ${p.title}`,
 };
 
 const describe = (notification: any) => {

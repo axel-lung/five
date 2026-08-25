@@ -3,8 +3,20 @@ import { api, createUser, createEvent, createGroup } from './helpers';
 const join = (token: string, eventId: string) =>
   api().post(`/api/events/${eventId}/join`).set('Authorization', `Bearer ${token}`);
 
-const leave = (token: string, eventId: string) =>
-  api().post(`/api/events/${eventId}/leave`).set('Authorization', `Bearer ${token}`);
+const leave = (token: string, eventId: string, newOrganizerId?: string) =>
+  api()
+    .post(`/api/events/${eventId}/leave`)
+    .set('Authorization', `Bearer ${token}`)
+    .send(newOrganizerId ? { newOrganizerId } : {});
+
+const withdraw = (token: string, eventId: string) =>
+  api().post(`/api/events/${eventId}/withdraw`).set('Authorization', `Bearer ${token}`);
+
+const transfer = (token: string, eventId: string, newOrganizerId: string) =>
+  api()
+    .post(`/api/events/${eventId}/transfer-ownership`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ newOrganizerId });
 
 const getEvent = (token: string, eventId: string) =>
   api().get(`/api/events/${eventId}`).set('Authorization', `Bearer ${token}`);
@@ -124,6 +136,157 @@ describe('Inscriptions et capacite (E-03)', () => {
 
     const statuses = [resA.body.status, resB.body.status].sort();
     expect(statuses).toEqual(['confirmed', 'waitlist']);
+  });
+});
+
+describe('Depart de l-organisateur (E-03)', () => {
+  it('refuse de partir sans designer de successeur', async () => {
+    const organizer = await createUser();
+    const player = await createUser();
+    const event = await createEvent(organizer.accessToken);
+    await join(player.accessToken, event.id);
+
+    const res = await leave(organizer.accessToken, event.id);
+
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('ORGANIZER_MUST_TRANSFER');
+
+    // Le refus doit etre total : une session a demi quittee, sans organisateur,
+    // est exactement ce que la regle cherche a empecher.
+    const refreshed = await getEvent(player.accessToken, event.id);
+    expect(refreshed.body.organizerId).toBe(organizer.id);
+  });
+
+  it('signale l-organisateur reste seul, plutot que de le laisser partir', async () => {
+    const organizer = await createUser();
+    const event = await createEvent(organizer.accessToken);
+
+    const res = await leave(organizer.accessToken, event.id);
+
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('ORGANIZER_ALONE');
+  });
+
+  it('legue la session au successeur designe et retire le partant', async () => {
+    const organizer = await createUser();
+    const player = await createUser();
+    const event = await createEvent(organizer.accessToken);
+    await join(organizer.accessToken, event.id);
+    await join(player.accessToken, event.id);
+
+    const res = await leave(organizer.accessToken, event.id, player.id);
+
+    expect(res.status).toBe(200);
+    expect(res.body.newOrganizerId).toBe(player.id);
+
+    const refreshed = await getEvent(player.accessToken, event.id);
+    expect(refreshed.body.organizerId).toBe(player.id);
+
+    const participants = await api()
+      .get(`/api/events/${event.id}/participants`)
+      .set('Authorization', `Bearer ${player.accessToken}`);
+    expect(participants.body.map((p: any) => p.userId)).toEqual([player.id]);
+  });
+
+  it('accepte un successeur pris dans la liste d-attente', async () => {
+    const organizer = await createUser();
+    const waiting = await createUser();
+    const event = await createEvent(organizer.accessToken, { capacity: 1 });
+    await join(organizer.accessToken, event.id);
+    await join(waiting.accessToken, event.id);
+
+    const res = await leave(organizer.accessToken, event.id, waiting.id);
+
+    expect(res.status).toBe(200);
+
+    // La place liberee lui revient au passage : il est promu confirme et se
+    // retrouve organisateur de la session qu-il attendait.
+    const refreshed = await getEvent(waiting.accessToken, event.id);
+    expect(refreshed.body.organizerId).toBe(waiting.id);
+    expect(refreshed.body.status).toBe('full');
+  });
+
+  it('refuse un successeur qui n-est pas dans la session', async () => {
+    const organizer = await createUser();
+    const player = await createUser();
+    const outsider = await createUser();
+    const event = await createEvent(organizer.accessToken);
+    await join(player.accessToken, event.id);
+
+    const res = await leave(organizer.accessToken, event.id, outsider.id);
+
+    expect(res.status).toBe(404);
+  });
+
+  // Une session terminee n-a plus rien a administrer : exiger une transmission
+  // pour la quitter n-aurait aucun sens.
+  it('laisse quitter une session terminee sans transmission', async () => {
+    const organizer = await createUser();
+    const player = await createUser();
+    const event = await createEvent(organizer.accessToken);
+    await join(organizer.accessToken, event.id);
+    await join(player.accessToken, event.id);
+
+    await api()
+      .patch(`/api/events/${event.id}/status`)
+      .set('Authorization', `Bearer ${organizer.accessToken}`)
+      .send({ status: 'completed' });
+
+    const res = await leave(organizer.accessToken, event.id);
+    expect(res.status).toBe(200);
+  });
+
+  // La nuance que /leave ne couvre pas : l-organisateur blesse rend sa place
+  // mais continue d-administrer la session.
+  it('laisse l-organisateur liberer sa place sans lacher l-organisation', async () => {
+    const organizer = await createUser();
+    const player = await createUser();
+    const event = await createEvent(organizer.accessToken);
+    await join(organizer.accessToken, event.id);
+    await join(player.accessToken, event.id);
+
+    const res = await withdraw(organizer.accessToken, event.id);
+
+    expect(res.status).toBe(200);
+
+    const refreshed = await getEvent(player.accessToken, event.id);
+    expect(refreshed.body.organizerId).toBe(organizer.id);
+  });
+
+  it('transmet l-organisation sans quitter la session', async () => {
+    const organizer = await createUser();
+    const player = await createUser();
+    const event = await createEvent(organizer.accessToken);
+    await join(organizer.accessToken, event.id);
+    await join(player.accessToken, event.id);
+
+    const res = await transfer(organizer.accessToken, event.id, player.id);
+
+    expect(res.status).toBe(200);
+
+    const refreshed = await getEvent(organizer.accessToken, event.id);
+    expect(refreshed.body.organizerId).toBe(player.id);
+
+    // L-ancien organisateur reste sur le terrain : il a passe la main, pas
+    // rendu sa place.
+    const participants = await api()
+      .get(`/api/events/${event.id}/participants`)
+      .set('Authorization', `Bearer ${player.accessToken}`);
+    expect(participants.body.map((p: any) => p.userId).sort()).toEqual(
+      [organizer.id, player.id].sort()
+    );
+  });
+
+  it('interdit a un tiers de transmettre l-organisation', async () => {
+    const organizer = await createUser();
+    const player = await createUser();
+    const intruder = await createUser();
+    const event = await createEvent(organizer.accessToken);
+    await join(player.accessToken, event.id);
+
+    const res = await transfer(intruder.accessToken, event.id, player.id);
+
+    expect(res.status).toBe(403);
   });
 });
 

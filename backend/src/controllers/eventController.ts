@@ -13,6 +13,11 @@ import { Op } from 'sequelize';
 import { createEventSchema } from '../utils/validationSchemas';
 import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
 import { cancelInscription, syncCapacityStatus } from '../services/inscriptions';
+import {
+  NEEDS_ORGANIZER,
+  eligibleSuccessors,
+  transferOrganizer,
+} from '../services/eventOwnership';
 import { isBlockedBetween } from './moderationController';
 import { notify, notifyMany } from '../services/notifications';
 
@@ -390,13 +395,41 @@ export const joinEvent = async (req: Request, res: Response, next: NextFunction)
 };
 
 /**
- * E-03 : se desister.
+ * E-03 : annule une inscription et previent le joueur promu.
+ *
+ * Partage par le desistement simple et par le depart complet : les deux
+ * liberent la place de la meme facon, seul le sort de l'organisation les
+ * distingue.
+ */
+const releaseSpot = async (event: any, inscription: any, t: any): Promise<string | null> => {
+  const promotedUserId = await cancelInscription(event, inscription, t);
+
+  // N-01 : le promu doit apprendre qu'il a une place. Emise dans la meme
+  // transaction que la promotion : les deux vivent ou meurent ensemble.
+  if (promotedUserId) {
+    await notify(
+      promotedUserId,
+      'event.spot_released',
+      { eventId: event.id, title: event.title, dateTime: event.dateTime },
+      t
+    );
+  }
+
+  return promotedUserId;
+};
+
+/**
+ * E-03 : se desister sans quitter la session.
  *
  * Liberer une place confirmee promeut automatiquement le premier inscrit en
  * liste d'attente, dans l'ordre d'inscription. Sans cela la liste d'attente ne
  * se vide jamais et les places liberees restent perdues.
+ *
+ * Pour un joueur, c'est un depart comme un autre. Pour l'organisateur, c'est la
+ * nuance que leaveEvent ne couvre pas : blesse ou indisponible, il rend sa
+ * place mais continue d'administrer la session.
  */
-export const leaveEvent = async (req: Request, res: Response, next: NextFunction) => {
+export const withdrawFromEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventId = req.params.id;
     const userId = (req as any).user.id;
@@ -420,20 +453,7 @@ export const leaveEvent = async (req: Request, res: Response, next: NextFunction
         return { error: { code: 404, message: 'You are not registered for this event' } };
       }
 
-      const promotedUserId = await cancelInscription(event, inscription, t);
-
-      // N-01 : le promu doit apprendre qu'il a une place. Emise dans la meme
-      // transaction que la promotion : les deux vivent ou meurent ensemble.
-      if (promotedUserId) {
-        await notify(
-          promotedUserId,
-          'event.spot_released',
-          { eventId: event.id, title: event.title, dateTime: event.dateTime },
-          t
-        );
-      }
-
-      return { promotedUserId };
+      return { promotedUserId: await releaseSpot(event, inscription, t) };
     });
 
     if (result.error) {
@@ -441,9 +461,166 @@ export const leaveEvent = async (req: Request, res: Response, next: NextFunction
     }
 
     res.json({
-      message: 'You have left the event',
+      message: 'You have withdrawn from the event',
       promotedUserId: result.promotedUserId,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * E-03 : quitter une session pour de bon.
+ *
+ * Pour un joueur, c'est un desistement. Pour l'organisateur, c'est autre
+ * chose : il emmene la session avec lui. Tant qu'elle a besoin d'un
+ * organisateur, il doit designer son successeur (`newOrganizerId`) parmi les
+ * inscrits, ou la supprimer s'il est le dernier. Sans cette regle, son depart
+ * laisserait une session que plus personne ne peut ouvrir, modifier ni
+ * annuler.
+ *
+ * Les deux refus portent un `reason` : le client doit pouvoir ouvrir le bon
+ * ecran — choix du successeur ou proposition de suppression — sans avoir a
+ * interpreter un message.
+ */
+export const leaveEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const eventId = req.params.id;
+    const userId = (req as any).user.id;
+    const { newOrganizerId } = req.body ?? {};
+
+    const result = await sequelize.transaction(async (t) => {
+      const event = await Event.findByPk(eventId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+
+      if (!event) {
+        return { error: { code: 404, message: 'Event not found' } };
+      }
+
+      const inscription = await EventInscription.findOne({
+        where: { eventId, userId },
+        transaction: t,
+      });
+
+      const registered = inscription !== null && inscription.status !== 'cancelled';
+      const isOrganizer = event.organizerId === userId;
+
+      // Un organisateur n'est pas inscrit d'office a sa propre session : il
+      // peut la quitter sans y avoir jamais pris de place.
+      if (!isOrganizer && !registered) {
+        return { error: { code: 404, message: 'You are not registered for this event' } };
+      }
+
+      let transferredTo: string | null = null;
+
+      if (isOrganizer && NEEDS_ORGANIZER.includes(event.status)) {
+        const successors = await eligibleSuccessors(eventId, userId, t);
+
+        if (successors.length === 0) {
+          return {
+            error: {
+              code: 409,
+              reason: 'ORGANIZER_ALONE',
+              message: 'You are the only player left in this session; delete it instead',
+            },
+          };
+        }
+
+        if (!newOrganizerId) {
+          return {
+            error: {
+              code: 409,
+              reason: 'ORGANIZER_MUST_TRANSFER',
+              message: 'Hand the session over to another player before leaving',
+            },
+          };
+        }
+
+        if (!successors.some((s: any) => s.userId === newOrganizerId)) {
+          return {
+            error: { code: 404, message: 'This player is not registered for this event' },
+          };
+        }
+
+        // Avant l'annulation de l'inscription : la promotion de la liste
+        // d'attente qui suit peut concerner le successeur lui-meme, et il doit
+        // deja etre organisateur a ce moment-la.
+        await transferOrganizer(event, newOrganizerId, t);
+        transferredTo = newOrganizerId;
+      }
+
+      const promotedUserId = registered ? await releaseSpot(event, inscription, t) : null;
+
+      return { promotedUserId, transferredTo };
+    });
+
+    if (result.error) {
+      const { code, message, reason } = result.error as any;
+      return res.status(code).json(reason ? { message, reason } : { message });
+    }
+
+    res.json({
+      message: 'You have left the event',
+      promotedUserId: result.promotedUserId,
+      newOrganizerId: result.transferredTo,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * E-02 : transmettre l'organisation sans quitter la session.
+ *
+ * Pendant du transfert de groupe (G-03) : l'organisateur qui ne peut plus
+ * s'en occuper passe la main tout en gardant sa place de joueur. C'est aussi
+ * la sortie de secours de leaveEvent, qui refuse tant qu'aucun successeur
+ * n'est designe.
+ *
+ * Verrou sur la ligne evenement : deux transmissions simultanees se
+ * marcheraient dessus et la derniere ecrirait par-dessus la premiere.
+ */
+export const transferEventOwnership = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const eventId = req.params.id;
+    const userId = (req as any).user.id;
+    const { newOrganizerId } = req.body;
+
+    const result = await sequelize.transaction(async (t) => {
+      const event = await Event.findByPk(eventId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+
+      if (!event) {
+        return { error: { code: 404, message: 'Event not found' } };
+      }
+
+      if (event.organizerId !== userId) {
+        return { error: { code: 403, message: 'Only the organizer can hand over this event' } };
+      }
+
+      if (newOrganizerId === userId) {
+        return { error: { code: 400, message: 'You already organize this event' } };
+      }
+
+      const successors = await eligibleSuccessors(eventId, userId, t);
+      if (!successors.some((s: any) => s.userId === newOrganizerId)) {
+        return { error: { code: 404, message: 'This player is not registered for this event' } };
+      }
+
+      await transferOrganizer(event, newOrganizerId, t);
+
+      return {};
+    });
+
+    if (result.error) {
+      return res.status(result.error.code).json({ message: result.error.message });
+    }
+
+    res.json({ message: 'Event handed over', organizerId: newOrganizerId });
   } catch (error) {
     next(error);
   }

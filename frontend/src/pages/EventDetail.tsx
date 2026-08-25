@@ -48,6 +48,10 @@ const EventDetail: React.FC = () => {
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [duplicateDate, setDuplicateDate] = useState('');
+  // Choix du successeur : ouvert soit pour un depart (« leave »), soit pour une
+  // transmission seule (« transfer »). Le meme panneau sert aux deux.
+  const [handover, setHandover] = useState<'leave' | 'transfer' | null>(null);
+  const [successorId, setSuccessorId] = useState('');
   const me = currentUser();
   const navigate = useNavigate();
 
@@ -81,7 +85,15 @@ const EventDetail: React.FC = () => {
   const spotsLeft = Math.max(0, event.capacity - confirmed.length);
   const closed = event.status === 'cancelled' || event.status === 'completed';
 
-  const act = async (action: 'join' | 'leave') => {
+  /**
+   * Les joueurs a qui l'organisation peut etre leguee. Les confirmes d'abord :
+   * ce sont eux qui seront sur le terrain. La liste d'attente reste eligible,
+   * sinon un organisateur dont tous les confirmes se sont desistes n'aurait
+   * plus personne a qui passer la main.
+   */
+  const successors = [...confirmed, ...waitlist].filter((p) => p.id !== me?.id);
+
+  const act = async (action: 'join' | 'withdraw') => {
     setActing(true);
     setError(null);
     setNotice(null);
@@ -112,6 +124,89 @@ const EventDetail: React.FC = () => {
           ? "Cette session n'est plus disponible."
           : (err.response?.data?.message ?? 'Action impossible')
       );
+    } finally {
+      setActing(false);
+    }
+  };
+
+  /** Suppression sans confirmation : les appelants demandent la leur. */
+  const destroyEvent = async () => {
+    await api.delete(`/events/${eventId}`);
+    navigate('/dashboard', { replace: true });
+  };
+
+  /**
+   * E-03 : quitter la session pour de bon.
+   *
+   * L'organisateur ne part pas les mains vides : l'API refuse tant qu'il n'a
+   * pas designe de successeur, et lui propose la suppression s'il est le
+   * dernier. Les deux refus arrivent avec un `reason`, ce qui evite de deviner
+   * le cas a partir du message.
+   */
+  const leaveSession = async (newOrganizerId?: string) => {
+    setActing(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const response = await api.post(
+        `/events/${eventId}/leave`,
+        newOrganizerId ? { newOrganizerId } : {}
+      );
+
+      setHandover(null);
+      setSuccessorId('');
+
+      if (response.data.newOrganizerId) {
+        const successor = successors.find((p) => p.id === response.data.newOrganizerId);
+        setNotice(
+          `Vous avez quitté la session. ${successor ? displayName(successor) : 'Un autre joueur'} en est désormais l'organisateur.`
+        );
+      } else {
+        setNotice('Vous avez quitté la session.');
+      }
+
+      await load();
+    } catch (err: any) {
+      const reason = err.response?.data?.reason;
+
+      if (reason === 'ORGANIZER_MUST_TRANSFER') {
+        setHandover('leave');
+      } else if (reason === 'ORGANIZER_ALONE') {
+        // Seul dans sa propre session : il n'y a personne a qui la transmettre,
+        // et la garder ne servirait a personne.
+        if (
+          window.confirm(
+            'Vous êtes seul dans cette session. La quitter revient à la supprimer. Confirmer ?'
+          )
+        ) {
+          await destroyEvent();
+        }
+      } else {
+        setError(err.response?.data?.message ?? 'Action impossible');
+      }
+    } finally {
+      setActing(false);
+    }
+  };
+
+  /** E-02 : passer la main tout en restant joueur. */
+  const transferOwnership = async (newOrganizerId: string) => {
+    setActing(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      await api.post(`/events/${eventId}/transfer-ownership`, { newOrganizerId });
+      const successor = successors.find((p) => p.id === newOrganizerId);
+      setHandover(null);
+      setSuccessorId('');
+      setNotice(
+        `${successor ? displayName(successor) : 'Le joueur choisi'} organise désormais cette session.`
+      );
+      await load();
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? 'Transmission impossible');
     } finally {
       setActing(false);
     }
@@ -223,8 +318,7 @@ const EventDetail: React.FC = () => {
 
     setActing(true);
     try {
-      await api.delete(`/events/${eventId}`);
-      navigate('/dashboard', { replace: true });
+      await destroyEvent();
     } catch (err: any) {
       setError(err.response?.data?.message ?? 'Suppression impossible');
       setActing(false);
@@ -244,6 +338,65 @@ const EventDetail: React.FC = () => {
       setActing(false);
     }
   };
+
+  /**
+   * Le meme panneau sert au depart et a la transmission seule. Il est rendu la
+   * ou l'action a ete declenchee — sous le bouton « Quitter la session » ou
+   * dans le bloc Organisation — pour ne pas apparaitre hors de l'ecran.
+   */
+  const handoverPanel = (
+    <Card className="mb-4">
+      <h2 className="font-semibold text-gray-900 mb-1">
+        {handover === 'leave' ? 'À qui laissez-vous la session ?' : "Transmettre l'organisation"}
+      </h2>
+      <p className="text-sm text-gray-600 mb-3">
+        {handover === 'leave'
+          ? 'Vous organisez cette session : désignez qui la reprend avant de partir.'
+          : "Vous gardez votre place de joueur ; c'est l'organisation qui change de mains."}
+      </p>
+
+      <Field label="Nouvel organisateur" name="successor">
+        <select
+          id="successor"
+          className={inputClass}
+          value={successorId}
+          onChange={(e) => setSuccessorId(e.target.value)}
+        >
+          <option value="">Choisir un joueur…</option>
+          {successors.map((player) => (
+            <option key={player.id} value={player.id}>
+              {displayName(player)}
+              {player.EventInscription?.status === 'waitlist' ? " (liste d'attente)" : ''}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <div className="flex gap-2 mt-3">
+        <Button
+          type="button"
+          disabled={acting || !successorId}
+          onClick={() =>
+            handover === 'leave' ? leaveSession(successorId) : transferOwnership(successorId)
+          }
+          full
+        >
+          {handover === 'leave' ? 'Transmettre et quitter' : 'Transmettre'}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            setHandover(null);
+            setSuccessorId('');
+          }}
+          full
+        >
+          Annuler
+        </Button>
+      </div>
+    </Card>
+  );
 
   return (
     <div>
@@ -311,7 +464,7 @@ const EventDetail: React.FC = () => {
       </Card>
 
       {!closed && (
-        <div className="mb-4">
+        <div className="mb-4 space-y-3">
           {myStatus ? (
             <>
               {myStatus === 'waitlist' && !notice && (
@@ -319,8 +472,8 @@ const EventDetail: React.FC = () => {
                   <Alert>Vous êtes en liste d'attente.</Alert>
                 </div>
               )}
-              <Button variant="secondary" onClick={() => act('leave')} disabled={acting} full>
-                {acting ? '…' : 'Me désister'}
+              <Button variant="secondary" onClick={() => act('withdraw')} disabled={acting} full>
+                {acting ? '…' : isOrganizer ? 'Libérer ma place' : 'Me désister'}
               </Button>
             </>
           ) : (
@@ -332,8 +485,23 @@ const EventDetail: React.FC = () => {
                   : "Rejoindre la liste d'attente"}
             </Button>
           )}
+
+          {/* E-03 : quitter la session, distinct du desistement. L'organisateur
+              y abandonne aussi l'organisation, ce qui suppose un successeur. */}
+          {isOrganizer && (
+            <Button
+              variant="secondary"
+              onClick={() => leaveSession()}
+              disabled={acting || handover === 'leave'}
+              full
+            >
+              Quitter la session
+            </Button>
+          )}
         </div>
       )}
+
+      {handover === 'leave' && handoverPanel}
 
       {/* S-03 : le lien partageable se consulte sans compte (E-07). */}
       {event.shareableLinkToken && (
@@ -470,6 +638,22 @@ const EventDetail: React.FC = () => {
                   Relancer les non-répondants
                 </Button>
               )}
+
+              {/* E-02 : passer la main sans partir. Sans inscrit, il n'y a
+                  personne a qui transmettre : le bouton n'a rien a proposer. */}
+              {!closed && successors.length > 0 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setHandover('transfer')}
+                  disabled={acting || handover === 'transfer'}
+                  full
+                >
+                  Transmettre l'organisation
+                </Button>
+              )}
+
+              {handover === 'transfer' && handoverPanel}
 
               {/* E-04 : recurrence, declenchee par l'organisateur. */}
               <div className="pt-3 border-t border-gray-100">

@@ -106,6 +106,17 @@ export const transferOwnershipSchema = Joi.object({
   newOwnerId: Joi.string().uuid().required(),
 });
 
+// E-02 / E-03 : l'organisateur qui quitte sa session doit la leguer. Le champ
+// est optionnel ici : sans lui, leaveEvent repond par un refus qui indique au
+// client s'il faut demander un successeur ou proposer la suppression.
+export const leaveEventSchema = Joi.object({
+  newOrganizerId: Joi.string().uuid().optional(),
+});
+
+export const transferEventOwnershipSchema = Joi.object({
+  newOrganizerId: Joi.string().uuid().required(),
+});
+
 // B-02 : moderation.
 export const suspendUserSchema = Joi.object({
   reason: Joi.string().max(255).required(),

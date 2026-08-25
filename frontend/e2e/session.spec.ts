@@ -97,6 +97,87 @@ test('supprime une session', async ({ page }) => {
   await expect(page.getByText('Five a supprimer')).toHaveCount(0);
 });
 
+/**
+ * E-03 : l'organisateur ne part pas sans laisser la session a quelqu'un.
+ * Sans cette regle, elle resterait ouverte sans personne pour la modifier,
+ * la relancer ni l'annuler.
+ */
+test('lègue la session avant de la quitter', async ({ browser }) => {
+  const organizerCtx = await browser.newContext();
+  const organizer = await organizerCtx.newPage();
+  const errors = watchErrors(organizer);
+  await register(organizer, account('Sebastien'));
+  const eventUrl = await createEvent(organizer, { title: 'Five du mardi', capacity: 8 });
+
+  const playerCtx = await browser.newContext();
+  const player = await playerCtx.newPage();
+  await register(player, account('Lucas'));
+  await player.goto(eventUrl);
+  await player.getByRole('button', { name: 'Je participe' }).click();
+  await expect(player.getByText('Votre place est confirmée')).toBeVisible();
+
+  await organizer.goto(eventUrl);
+  await organizer.getByRole('button', { name: 'Quitter la session' }).click();
+
+  // Le depart est refuse tant qu'aucun successeur n'est designe : le panneau
+  // de choix prend la place du message d'erreur.
+  await expect(organizer.getByText('À qui laissez-vous la session ?')).toBeVisible();
+  await organizer.selectOption('#successor', { label: 'Lucas' });
+  await organizer.getByRole('button', { name: 'Transmettre et quitter' }).click();
+
+  await expect(organizer.getByText("Lucas en est désormais l'organisateur")).toBeVisible();
+  await expect(organizer.getByText('Organisation')).toHaveCount(0);
+  await expectHealthy(organizer, errors);
+
+  // Le successeur herite pour de bon : les commandes d'organisation lui sont
+  // ouvertes, et sa boite de reception le lui dit.
+  await player.reload();
+  await expect(player.getByRole('button', { name: 'Modifier la session' })).toBeVisible();
+  await player.goto('/notifications');
+  await expect(player.getByText(/Vous organisez désormais Five du mardi/)).toBeVisible();
+
+  for (const ctx of [organizerCtx, playerCtx]) await ctx.close();
+});
+
+test('transmet l-organisation sans quitter la session', async ({ browser }) => {
+  const organizerCtx = await browser.newContext();
+  const organizer = await organizerCtx.newPage();
+  await register(organizer, account('Sebastien'));
+  const eventUrl = await createEvent(organizer, { title: 'Five du jeudi', capacity: 8 });
+
+  const playerCtx = await browser.newContext();
+  const player = await playerCtx.newPage();
+  await register(player, account('Lucas'));
+  await player.goto(eventUrl);
+  await player.getByRole('button', { name: 'Je participe' }).click();
+  await expect(player.getByText('Votre place est confirmée')).toBeVisible();
+
+  await organizer.goto(eventUrl);
+  await organizer.getByRole('button', { name: "Transmettre l'organisation" }).click();
+  await organizer.selectOption('#successor', { label: 'Lucas' });
+  await organizer.getByRole('button', { name: 'Transmettre', exact: true }).click();
+
+  await expect(organizer.getByText('Lucas organise désormais cette session')).toBeVisible();
+  await expect(organizer.getByRole('button', { name: 'Modifier la session' })).toHaveCount(0);
+
+  // Il a passe la main, pas rendu sa place : rien ne l'inscrit ni ne le
+  // desinscrit au passage.
+  await expect(organizer.getByRole('button', { name: 'Je participe' })).toBeVisible();
+
+  for (const ctx of [organizerCtx, playerCtx]) await ctx.close();
+});
+
+test('propose la suppression a l-organisateur reste seul', async ({ page }) => {
+  await register(page, account('Sebastien'));
+  await createEvent(page, { title: 'Five sans personne', capacity: 5 });
+
+  page.on('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Quitter la session' }).click();
+
+  await page.waitForURL('**/dashboard');
+  await expect(page.getByText('Five sans personne')).toHaveCount(0);
+});
+
 test('un joueur ne voit aucune action d-organisation', async ({ browser }) => {
   const organizerCtx = await browser.newContext();
   const organizer = await organizerCtx.newPage();
@@ -112,6 +193,7 @@ test('un joueur ne voit aucune action d-organisation', async ({ browser }) => {
   await expect(player.getByText('Organisation')).toHaveCount(0);
   await expect(player.getByRole('button', { name: 'Modifier la session' })).toHaveCount(0);
   await expect(player.getByRole('button', { name: 'Supprimer la session' })).toHaveCount(0);
+  await expect(player.getByRole('button', { name: 'Quitter la session' })).toHaveCount(0);
   await expect(player.getByRole('button', { name: 'Je participe' })).toBeVisible();
   await expectHealthy(player, errors);
 

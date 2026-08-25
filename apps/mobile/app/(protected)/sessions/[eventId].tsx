@@ -1,14 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { api, useCurrentUser } from 'five-api-client';
 import {
   Alert,
   Button,
   Card,
+  confirmAsync,
+  Field,
   formatDateTime,
   Loading,
   PageTitle,
+  Select,
   StatusBadge,
 } from 'five-ui';
 import ShareButton from '../../../components/ShareButton';
@@ -45,6 +48,10 @@ export default function EventDetail() {
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Choix du successeur : ouvert soit pour un depart (« leave »), soit pour une
+  // transmission seule (« transfer »). Le meme panneau sert aux deux.
+  const [handover, setHandover] = useState<'leave' | 'transfer' | null>(null);
+  const [successorId, setSuccessorId] = useState('');
   const me = useCurrentUser();
 
   const load = useCallback(async () => {
@@ -77,7 +84,15 @@ export default function EventDetail() {
   const spotsLeft = Math.max(0, event.capacity - confirmed.length);
   const closed = event.status === 'cancelled' || event.status === 'completed';
 
-  const act = async (action: 'join' | 'leave') => {
+  /**
+   * Les joueurs a qui l'organisation peut etre leguee. Les confirmes d'abord :
+   * ce sont eux qui seront sur le terrain. La liste d'attente reste eligible,
+   * sinon un organisateur dont tous les confirmes se sont desistes n'aurait
+   * plus personne a qui passer la main.
+   */
+  const successors = [...confirmed, ...waitlist].filter((p) => p.id !== me?.id);
+
+  const act = async (action: 'join' | 'withdraw') => {
     setActing(true);
     setError(null);
     setNotice(null);
@@ -108,6 +123,85 @@ export default function EventDetail() {
           ? "Cette session n'est plus disponible."
           : (err.response?.data?.message ?? 'Action impossible')
       );
+    } finally {
+      setActing(false);
+    }
+  };
+
+  /**
+   * E-03 : quitter la session pour de bon.
+   *
+   * L'organisateur ne part pas les mains vides : l'API refuse tant qu'il n'a
+   * pas designe de successeur, et lui propose la suppression s'il est le
+   * dernier. Les deux refus arrivent avec un `reason`, ce qui evite de deviner
+   * le cas a partir du message.
+   */
+  const leaveSession = async (newOrganizerId?: string) => {
+    setActing(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const response = await api.post(
+        `/events/${eventId}/leave`,
+        newOrganizerId ? { newOrganizerId } : {}
+      );
+
+      setHandover(null);
+      setSuccessorId('');
+
+      if (response.data.newOrganizerId) {
+        const successor = successors.find((p) => p.id === response.data.newOrganizerId);
+        setNotice(
+          `Vous avez quitté la session. ${successor ? displayName(successor) : 'Un autre joueur'} en est désormais l'organisateur.`
+        );
+      } else {
+        setNotice('Vous avez quitté la session.');
+      }
+
+      await load();
+    } catch (err: any) {
+      const reason = err.response?.data?.reason;
+
+      if (reason === 'ORGANIZER_MUST_TRANSFER') {
+        setHandover('leave');
+      } else if (reason === 'ORGANIZER_ALONE') {
+        // Seul dans sa propre session : il n'y a personne a qui la transmettre,
+        // et la garder ne servirait a personne.
+        const accepted = await confirmAsync(
+          'Vous êtes seul dans cette session. La quitter revient à la supprimer.',
+          { title: 'Supprimer la session', confirmLabel: 'Supprimer', destructive: true }
+        );
+
+        if (accepted) {
+          await api.delete(`/events/${eventId}`);
+          router.replace('/dashboard');
+        }
+      } else {
+        setError(err.response?.data?.message ?? 'Action impossible');
+      }
+    } finally {
+      setActing(false);
+    }
+  };
+
+  /** E-02 : passer la main tout en restant joueur. */
+  const transferOwnership = async (newOrganizerId: string) => {
+    setActing(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      await api.post(`/events/${eventId}/transfer-ownership`, { newOrganizerId });
+      const successor = successors.find((p) => p.id === newOrganizerId);
+      setHandover(null);
+      setSuccessorId('');
+      setNotice(
+        `${successor ? displayName(successor) : 'Le joueur choisi'} organise désormais cette session.`
+      );
+      await load();
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? 'Transmission impossible');
     } finally {
       setActing(false);
     }
@@ -156,6 +250,66 @@ export default function EventDetail() {
       setActing(false);
     }
   };
+
+  /**
+   * Le meme panneau sert au depart et a la transmission seule. Il est rendu la
+   * ou l'action a ete declenchee — sous le bouton « Quitter la session » ou
+   * dans le bloc Organisation — pour ne pas apparaitre hors de l'ecran.
+   */
+  const handoverPanel = (
+    <Card className="mb-4">
+      <Text className="font-semibold text-gray-900 mb-1">
+        {handover === 'leave' ? 'À qui laissez-vous la session ?' : "Transmettre l'organisation"}
+      </Text>
+      <Text className="text-sm text-gray-600 mb-3">
+        {handover === 'leave'
+          ? 'Vous organisez cette session : désignez qui la reprend avant de partir.'
+          : "Vous gardez votre place de joueur ; c'est l'organisation qui change de mains."}
+      </Text>
+
+      <Field label="Nouvel organisateur">
+        <Select
+          testID="successor-select"
+          value={successorId}
+          onChange={setSuccessorId}
+          placeholder="Choisir un joueur…"
+          options={successors.map((player) => ({
+            value: player.id,
+            label:
+              displayName(player) +
+              (player.EventInscription?.status === 'waitlist' ? " (liste d'attente)" : ''),
+          }))}
+        />
+      </Field>
+
+      <View className="flex-row gap-2 mt-3">
+        <View className="flex-1">
+          <Button
+            testID="handover-confirm"
+            disabled={acting || !successorId}
+            onPress={() =>
+              handover === 'leave' ? leaveSession(successorId) : transferOwnership(successorId)
+            }
+            full
+          >
+            {handover === 'leave' ? 'Transmettre et quitter' : 'Transmettre'}
+          </Button>
+        </View>
+        <View className="flex-1">
+          <Button
+            variant="secondary"
+            onPress={() => {
+              setHandover(null);
+              setSuccessorId('');
+            }}
+            full
+          >
+            Annuler
+          </Button>
+        </View>
+      </View>
+    </Card>
+  );
 
   return (
     <Screen>
@@ -210,7 +364,7 @@ export default function EventDetail() {
       </Card>
 
       {!closed ? (
-        <View className="mb-4">
+        <View className="mb-4 gap-3">
           {myStatus ? (
             <>
               {myStatus === 'waitlist' && !notice ? (
@@ -221,11 +375,11 @@ export default function EventDetail() {
               <Button
                 testID="event-leave"
                 variant="secondary"
-                onPress={() => act('leave')}
+                onPress={() => act('withdraw')}
                 disabled={acting}
                 full
               >
-                {acting ? '…' : 'Me désister'}
+                {acting ? '…' : isOrganizer ? 'Libérer ma place' : 'Me désister'}
               </Button>
             </>
           ) : (
@@ -233,8 +387,24 @@ export default function EventDetail() {
               {acting ? '…' : spotsLeft > 0 ? 'Je participe' : "Rejoindre la liste d'attente"}
             </Button>
           )}
+
+          {/* E-03 : quitter la session, distinct du desistement. L'organisateur
+              y abandonne aussi l'organisation, ce qui suppose un successeur. */}
+          {isOrganizer ? (
+            <Button
+              testID="event-quit"
+              variant="secondary"
+              onPress={() => leaveSession()}
+              disabled={acting || handover === 'leave'}
+              full
+            >
+              Quitter la session
+            </Button>
+          ) : null}
         </View>
       ) : null}
+
+      {handover === 'leave' ? handoverPanel : null}
 
       {/* S-03 : le lien partageable se consulte sans compte (E-07). */}
       {event.shareableLinkToken && (
@@ -318,6 +488,22 @@ export default function EventDetail() {
                 Relancer les non-répondants
               </Button>
             ) : null}
+
+            {/* E-02 : passer la main sans partir. Sans inscrit, il n'y a
+                personne a qui transmettre : le bouton n'a rien a proposer. */}
+            {!closed && successors.length > 0 ? (
+              <Button
+                testID="event-transfer"
+                variant="secondary"
+                onPress={() => setHandover('transfer')}
+                disabled={acting || handover === 'transfer'}
+                full
+              >
+                Transmettre l'organisation
+              </Button>
+            ) : null}
+
+            {handover === 'transfer' ? handoverPanel : null}
           </View>
 
           {/* TODO Phase 2 : modification (E-01), duplication (E-04), passage en

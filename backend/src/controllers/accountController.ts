@@ -9,6 +9,11 @@ import {
   sequelize,
 } from '../models';
 import { cancelInscription } from '../services/inscriptions';
+import {
+  NEEDS_ORGANIZER,
+  eligibleSuccessors,
+  transferOrganizer,
+} from '../services/eventOwnership';
 import { notify, notifyMany } from '../services/notifications';
 import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
 import { isBlockedBetween } from './moderationController';
@@ -63,19 +68,28 @@ export const deleteAccount = async (req: Request, res: Response, next: NextFunct
         }
       }
 
-      // 2. Evenements organises : annuler ceux a venir, garder les passes.
-      // Un evenement passe fait partie de l'historique des autres joueurs ;
-      // un evenement futur n'aurait plus personne pour l'administrer.
+      // 2. Evenements organises : transmettre ceux a venir, garder les passes.
+      // Un evenement passe fait partie de l'historique des autres joueurs ; un
+      // evenement futur a besoin de quelqu'un pour l'administrer. On applique
+      // la meme regle qu'un depart volontaire (E-03) : le legs d'abord,
+      // l'annulation seulement quand il ne reste personne a qui leguer.
       const upcoming = await Event.findAll({
         where: {
           organizerId: userId,
           dateTime: { [Op.gt]: new Date() },
-          status: { [Op.in]: ['draft', 'open', 'full'] },
+          status: { [Op.in]: NEEDS_ORGANIZER },
         },
         transaction: t,
       });
 
       for (const event of upcoming) {
+        const [successor] = await eligibleSuccessors(event.id, userId, t);
+
+        if (successor) {
+          await transferOrganizer(event, successor.userId, t);
+          continue;
+        }
+
         await event.update({ status: 'cancelled' }, { transaction: t });
 
         // N-01 : les inscrits doivent apprendre l'annulation ; sans cela ils
