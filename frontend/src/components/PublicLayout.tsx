@@ -11,9 +11,10 @@ import { Link, Outlet } from 'react-router-dom';
 export const PublicLayout: React.FC = () => (
   <div className="min-h-screen bg-gray-50 flex flex-col">
     <header className="bg-gray-900 text-white">
-      <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-center">
         <Link to="/" className="text-lg font-bold">
-          Five
+          HighFive
+          <img src="../assets/highfive_logo.png" alt="" className='size-16' />
         </Link>
 
         <div className="flex items-center gap-2 text-sm">
