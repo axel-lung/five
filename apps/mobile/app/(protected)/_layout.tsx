@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Link, Redirect, Stack, usePathname } from 'expo-router';
+import { Link, Redirect, Tabs, usePathname } from 'expo-router';
 import { api, useHasSession, useProfile } from 'five-api-client';
 import { eventBus, Loading } from 'five-ui';
 import BottomNav from '../../components/BottomNav';
 import { shellMainClass } from '../../components/navShell';
+import { SHELL_BACKGROUND } from '../../components/theme';
 
 /**
  * Mise en page des ecrans authentifies, et garde de session.
@@ -60,11 +61,18 @@ export default function ProtectedLayout() {
       </View>
 
       <View className={`flex-1 w-full max-w-4xl self-center px-4 py-6 ${shellMainClass}`}>
-        <Stack
+        {/* Onglets et non pile : une pile demonte les ecrans qu'on depile, si
+            bien que revenir sur un onglet le rechargeait entierement. Chaque
+            onglet garde ici son etat et sa propre pile interne. La barre est
+            rendue par la coque, en dehors du navigateur, d'ou tabBar nul. */}
+        <Tabs
+          tabBar={() => null}
+          // Le retour Android suit l'ordre de visite plutot que de retomber
+          // systematiquement sur le premier onglet.
+          backBehavior="history"
           screenOptions={{
             headerShown: false,
-            // Sinon le fond blanc du navigateur recouvre le gris de la coque.
-            contentStyle: { backgroundColor: 'transparent' },
+            sceneStyle: { backgroundColor: SHELL_BACKGROUND },
           }}
         />
       </View>

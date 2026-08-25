@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Link, Stack } from 'expo-router';
+import { SHELL_BACKGROUND } from '../../components/theme';
 
 /**
  * Mise en page des ecrans consultables sans compte : accueil, connexion,
@@ -41,10 +42,12 @@ export default function PublicLayout() {
       </View>
 
       <View className="flex-1 w-full max-w-4xl self-center px-4 py-6">
+        {/* Fond opaque : transparent, l'ecran sortant reste visible a travers
+            l'ecran entrant pendant toute l'animation de transition. */}
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: 'transparent' },
+            contentStyle: { backgroundColor: SHELL_BACKGROUND },
           }}
         />
       </View>
