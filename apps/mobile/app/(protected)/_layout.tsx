@@ -56,7 +56,7 @@ export default function ProtectedLayout() {
       <View className="bg-gray-900">
         <View className="w-full max-w-4xl self-center px-4 h-14 flex-row items-center">
           <Link href="/dashboard" asChild>
-            <Text className="text-lg font-bold text-white">Five</Text>
+            <Text className="text-lg font-bold text-white">HighFive</Text>
           </Link>
         </View>
       </View>
