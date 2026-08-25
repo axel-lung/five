@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useProfile } from '../services/session';
 import BottomNav from './BottomNav';
 import BugReportButton from './BugReportButton';
-
+import logo from '../assets/highfive_logo.png';
 /**
  * Mise en page des ecrans authentifies.
  *
@@ -38,9 +38,9 @@ export const Layout: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="bg-gray-900 text-white">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center">
+        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-center">
           <Link to="/dashboard" className="text-lg font-bold">
-            Five
+            <img src={logo} alt="HighFive" className="h-10 w-auto" />
           </Link>
         </div>
       </header>
