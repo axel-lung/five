@@ -1,6 +1,12 @@
 import React from 'react';
 import { Link, Outlet } from 'react-router-dom';
 
+// Importe et non chemin en dur : une chaine dans `src` echappe au bundler, et
+// le navigateur la resout depuis l'URL de la page — donc pas depuis ce fichier.
+// L'import rend l'URL finale, hachee au build, et casse la compilation si le
+// fichier disparait.
+import logo from '../assets/highfive_logo.png';
+
 /**
  * Mise en page des ecrans consultables sans compte : accueil, connexion,
  * inscription, apercu d'invitation et de session partagee.
@@ -13,8 +19,9 @@ export const PublicLayout: React.FC = () => (
     <header className="bg-gray-900 text-white">
       <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-center">
         <Link to="/" className="text-lg font-bold">
-          HighFive
-          <img src="../assets/highfive_logo.png" alt="" className='size-16' />
+          {/* Le logo est le seul contenu du lien : sans `alt`, le lien
+              d'accueil n'a plus de nom pour un lecteur d'ecran. */}
+          <img src={logo} alt="HighFive" className="h-10 w-auto" />
         </Link>
 
         <div className="flex items-center gap-2 text-sm">
