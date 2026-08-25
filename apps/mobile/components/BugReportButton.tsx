@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import { usePathname } from 'expo-router';
 import { api } from 'five-api-client';
-import { Alert, Button, Field, Input } from 'five-ui';
-import { Select } from 'five-ui'; // Import the Select component from five-ui
+import { Alert, Button, Field, Input, Select } from 'five-ui';
 
 /**
  * Déclaration d'anomalie, depuis n'importe quel écran connecté.
@@ -37,33 +37,14 @@ export const BugReportButton: React.FC = () => {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Stocker l'URL du contexte (à améliorer avec l'URL réelle depuis expo-router)
-  const contextUrlRef = useRef<string>('/unknown');
-  const openerRef = useRef<TouchableOpacity>(null);
-
-  // Mettre à jour l'URL du contexte quand elle change
-  useEffect(() => {
-    // Pour ce MVP, nous utilisons une valeur placeholder
-    // Dans une implémentation réelle, nous obtiendrions l'URL depuis le système de navigation
-    contextUrlRef.current = '/unknown';
-  }, []);
+  // L'ecran fautif, lu sur le routeur : c'est le premier renseignement qui
+  // manque a une declaration, et celui qu'un testeur ne pense jamais a donner.
+  const contextUrl = usePathname();
 
   const start = () => {
     setError(null);
     setOpen(true);
   };
-
-  // Gérer le focus quand le modal s'ouvre/se ferme
-  useEffect(() => {
-    if (open) {
-      // Après l'ouverture du modal, donner le focus au premier champ
-      setTimeout(() => {
-        // Le focus sera géré naturellement par le premier Input
-      }, 100);
-    } else {
-      openerRef.current?.focus();
-    }
-  }, [open]);
 
   // Masquer le message de confirmation après un délai
   useEffect(() => {
@@ -82,7 +63,7 @@ export const BugReportButton: React.FC = () => {
         severity,
         description,
         context: {
-          url: contextUrlRef.current,
+          url: contextUrl,
           platform: 'mobile', // Identifie que ça vient de l'app mobile
           // Nous pourrions ajouter plus de détails device si nécessaire
         },
@@ -106,7 +87,6 @@ export const BugReportButton: React.FC = () => {
       {/* Bouton flottant pour ouvrir le formulaire */}
       <View style={styles.fabContainer}>
         <TouchableOpacity
-          ref={openerRef}
           activeOpacity={0.7}
           onPress={start}
           accessibilityLabel="Déclarer une anomalie"
@@ -181,25 +161,27 @@ export const BugReportButton: React.FC = () => {
                     onChangeText={setDescription}
                     placeholder="Décrivez le problème..."
                     multiline
-                    minHeight={80}
+                    // Un champ multiligne demarre a la hauteur d'une ligne et
+                    // le texte s'y centre : sans ces deux reglages, on ecrit
+                    // dans une fente d'une ligne.
+                    style={{ minHeight: 80 }}
+                    textAlignVertical="top"
                   />
                 </Field>
 
-                <Text style={styles.contextText}>
-                  Écran : {contextUrlRef.current}
-                </Text>
+                <Text style={styles.contextText}>Écran : {contextUrl}</Text>
 
                 <View style={styles.buttonContainer}>
                   <Button
-                    title={busy ? 'Envoi…' : 'Envoyer'}
-                    onPress={submit}
-                    disabled={busy}
-                  />
-                  <Button
-                    title="Annuler"
+                    testID="bug-cancel"
                     onPress={() => setOpen(false)}
                     variant="secondary"
-                  />
+                  >
+                    Annuler
+                  </Button>
+                  <Button testID="bug-submit" onPress={submit} disabled={busy}>
+                    {busy ? 'Envoi…' : 'Envoyer'}
+                  </Button>
                 </View>
               </View>
             </View>
@@ -287,3 +269,5 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
 });
+
+export default BugReportButton;

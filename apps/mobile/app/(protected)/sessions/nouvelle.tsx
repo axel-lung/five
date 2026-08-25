@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View, ScrollView } from 'react-native';
-import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import { api, useCurrentUser } from 'five-api-client';
+import { View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { api } from 'five-api-client';
 import {
   Alert,
   Button,
@@ -14,7 +14,9 @@ import {
 import Screen from '../../../components/Screen';
 
 export default function CreateEvent() {
-  const [searchParams] = useLocalSearchParams<{ groupId?: string }>();
+  // Un objet, pas un tuple : le deballer en tableau leve « n'est pas iterable »
+  // et laisse l'ecran blanc.
+  const searchParams = useLocalSearchParams<{ groupId?: string }>();
   const router = useRouter();
   const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([]);
   const [venues, setVenues] = useState<Array<{ id: string; name: string; city?: string }>>([]);
@@ -31,7 +33,6 @@ export default function CreateEvent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const me = useCurrentUser();
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -74,8 +75,7 @@ export default function CreateEvent() {
     if (error) setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setLoading(true);
     setError(null);
     setNotice(null);
@@ -124,11 +124,7 @@ export default function CreateEvent() {
   if (loading && !notice) return <Loading />;
 
   return (
-    <ScrollView
-      contentContainerClassName="px-4 py-6"
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
+    <Screen>
       <PageTitle subtitle="Date, lieu, nombre de places. Le reste suit.">
         Créer une session
       </PageTitle>
@@ -145,7 +141,9 @@ export default function CreateEvent() {
         </View>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Pas de <form> : il n'existe pas en React Native, et il n'y a rien a
+          soumettre — c'est le bouton qui declenche l'envoi. */}
+      <View className="gap-4">
         <Field label="Titre" hint="Ex: Five du mardi">
           <Input
             testID="create-event-title"
@@ -199,7 +197,7 @@ export default function CreateEvent() {
             value={formData.capacity}
             onChangeText={(value) => handleChange('capacity', value)}
             editable={!loading}
-            keyboardType="number"
+            keyboardType="number-pad"
             placeholder="10"
           />
         </Field>
@@ -231,20 +229,15 @@ export default function CreateEvent() {
           </Field>
         )}
 
-        <View className="space-y-3">
-          <Button
-            testID="create-event-submit"
-            onPress={handleSubmit}
-            disabled={loading}
-            full
-          >
-            {loading ? 'Création…' : 'Créer la session'}
-          </Button>
-
-          {/* Optional: Clear notice when user interacts */}
-          {/* Not implemented to keep it simple */}
-        </View>
-      </form>
-    </ScrollView>
+        <Button
+          testID="create-event-submit"
+          onPress={handleSubmit}
+          disabled={loading}
+          full
+        >
+          {loading ? 'Création…' : 'Créer la session'}
+        </Button>
+      </View>
+    </Screen>
   );
 }

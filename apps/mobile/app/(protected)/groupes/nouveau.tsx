@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Text, View, ScrollView } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { api } from 'five-api-client';
 import {
   Alert,
@@ -34,8 +34,7 @@ export default function CreateGroup() {
     if (error) setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setLoading(true);
     setError(null);
     setNotice(null);
@@ -71,11 +70,7 @@ export default function CreateGroup() {
   if (loading && !notice) return <Loading />;
 
   return (
-    <ScrollView
-      contentContainerClassName="px-4 py-6"
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
+    <Screen>
       <PageTitle subtitle="Le noyau de joueurs que vous retrouvez chaque semaine.">
         Créer un groupe
       </PageTitle>
@@ -92,7 +87,9 @@ export default function CreateGroup() {
         </View>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Pas de <form> : il n'existe pas en React Native, et il n'y a rien a
+          soumettre — c'est le bouton qui declenche l'envoi. */}
+      <View className="gap-4">
         <Field label="Nom du groupe" hint="Ex: Les Rémois">
           <Input
             testID="create-group-name"
@@ -141,17 +138,15 @@ export default function CreateGroup() {
           />
         </Field>
 
-        <View className="space-y-3">
-          <Button
-            testID="create-group-submit"
-            onPress={handleSubmit}
-            disabled={loading}
-            full
-          >
-            {loading ? 'Création…' : 'Créer le groupe'}
-          </Button>
-        </View>
-      </form>
-    </ScrollView>
+        <Button
+          testID="create-group-submit"
+          onPress={handleSubmit}
+          disabled={loading}
+          full
+        >
+          {loading ? 'Création…' : 'Créer le groupe'}
+        </Button>
+      </View>
+    </Screen>
   );
 }

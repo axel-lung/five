@@ -69,3 +69,5 @@ export const ShareButton: React.FC<{ url: string; text: string }> = ({ url, text
     </View>
   );
 };
+
+export default ShareButton;

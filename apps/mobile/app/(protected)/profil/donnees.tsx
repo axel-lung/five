@@ -1,18 +1,10 @@
 import React, { useState } from 'react';
-import { Text, View, ScrollView, Platform, Alert as RNAlert } from 'react-native';
+import { Text, View } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { api, clearSession, useCurrentUser } from 'five-api-client';
-import {
-  Alert,
-  Button,
-  Card,
-  Field,
-  Input,
-  Loading,
-  PageTitle,
-} from 'five-ui';
+import { Alert, Button, Card, Field, Input, PageTitle } from 'five-ui';
 import Screen from '../../../components/Screen';
 
 /** Saisie exigée pour confirmer l'effacement : un clic seul est trop facile. */
@@ -81,7 +73,10 @@ export default function ProfileData() {
 
     try {
       await api.delete('/users/me');
-      clearSession();
+      // Attendu : le coffre natif est asynchrone, et le garde de session lit le
+      // jeton des le rendu suivant. Sans ca, il peut encore le trouver et
+      // renvoyer vers un compte qui n'existe plus.
+      await clearSession();
       router.replace('/');
     } catch (err: any) {
       setError(err.response?.data?.message ?? 'Suppression impossible');
@@ -91,11 +86,7 @@ export default function ProfileData() {
   };
 
   return (
-    <ScrollView
-      contentContainerClassName="px-4 py-6"
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
+    <Screen>
       <PageTitle subtitle={user?.email}>Mes données</PageTitle>
 
       {notice && (
@@ -111,55 +102,61 @@ export default function ProfileData() {
       )}
 
       <Card className="mb-6">
-        <h2 className="font-semibold text-gray-900 mb-1">Exporter mes données</h2>
-        <p className="text-sm text-gray-600 mb-3">
+        <Text className="font-semibold text-gray-900 mb-1">Exporter mes données</Text>
+        <Text className="text-sm text-gray-600 mb-3">
           Un fichier JSON avec votre profil, vos groupes, vos sessions et vos inscriptions.
-        </p>
-        <Button
-          testID="export-data"
-          title="Télécharger mes données"
-          onPress={exportData}
-          disabled={busy}
-        />
+        </Text>
+        <Button testID="export-data" onPress={exportData} disabled={busy} full>
+          Télécharger mes données
+        </Button>
       </Card>
 
       <Card className="border-red-200">
-        <h2 className="font-semibold text-red-800 mb-1">Supprimer mon compte</h2>
-        <div className="text-sm text-gray-700 space-y-2 mb-4">
-          <p>Cette action est irréversible. Concrètement :</p>
-          <ul className="list-disc list-inside space-y-1 text-gray-600">
-            <li>vos informations personnelles sont effacées&nbsp;;</li>
-            <li>
-              les groupes dont vous êtes propriétaire sont transmis à un autre membre, ou
-              supprimés si vous êtes seul&nbsp;;
-            </li>
-            <li>vos sessions à venir sont annulées et les inscrits prévenus&nbsp;;</li>
-            <li>
-              les sessions passées restent, pour ne pas effacer l'historique des autres
-              joueurs.
-            </li>
-          </ul>
-        </div>
+        <Text className="font-semibold text-red-800 mb-1">Supprimer mon compte</Text>
 
-        <label htmlFor="confirmation" className="block text-sm font-medium text-gray-700 mb-1">
-          Tapez <span className="font-mono font-bold">{CONFIRMATION}</span> pour confirmer
-        </label>
-        <Input
-          testID="delete-confirmation"
-          value={confirmation}
-          onChangeText={(value) => setConfirmation(value)}
-          placeholder="Tapez SUPPRIMER pour confirmer"
-          autoComplete="off"
-          editable={!busy}
-        />
+        {/* Une liste a puces se compose a la main : React Native n'a ni <ul>
+            ni marqueur de liste. */}
+        <View className="mb-4 gap-2">
+          <Text className="text-sm text-gray-700">
+            Cette action est irréversible. Concrètement :
+          </Text>
+          {[
+            'vos informations personnelles sont effacées ;',
+            'les groupes dont vous êtes propriétaire sont transmis à un autre membre, ou supprimés si vous êtes seul ;',
+            'vos sessions à venir sont annulées et les inscrits prévenus ;',
+            "les sessions passées restent, pour ne pas effacer l'historique des autres joueurs.",
+          ].map((item) => (
+            <View key={item} className="flex-row gap-2">
+              <Text className="text-sm text-gray-600">•</Text>
+              <Text className="flex-1 text-sm text-gray-600">{item}</Text>
+            </View>
+          ))}
+        </View>
 
-        <Button
-          testID="delete-account"
-          title={busy ? '…' : 'Supprimer définitivement mon compte'}
-          onPress={deleteAccount}
-          disabled={busy || confirmation !== CONFIRMATION}
-        />
+        <Field label={`Tapez ${CONFIRMATION} pour confirmer`}>
+          <Input
+            testID="delete-confirmation"
+            value={confirmation}
+            onChangeText={(value) => setConfirmation(value)}
+            placeholder={CONFIRMATION}
+            autoCapitalize="characters"
+            autoComplete="off"
+            editable={!busy}
+          />
+        </Field>
+
+        <View className="mt-4">
+          <Button
+            testID="delete-account"
+            variant="danger"
+            onPress={deleteAccount}
+            disabled={busy || confirmation !== CONFIRMATION}
+            full
+          >
+            {busy ? '…' : 'Supprimer définitivement mon compte'}
+          </Button>
+        </View>
       </Card>
-    </ScrollView>
+    </Screen>
   );
 }
