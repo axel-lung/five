@@ -1,0 +1,91 @@
+name: APK Android (test)
+
+# Build manuel d'un APK installable directement sur un telephone, sans passer
+# par le Play Store ni par un compte Expo/EAS.
+#
+# Le projet natif n'est pas versionne : `expo prebuild` le regenere a chaque
+# fois a partir de app.json, qui reste la seule source de verite de la
+# configuration native.
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "API visee par l'APK"
+        type: string
+        default: https://five.alng.fr/api
+      architectures:
+        description: "ABI a compiler (moins il y en a, plus c'est rapide)"
+        type: choice
+        default: arm64-v8a
+        options:
+          - arm64-v8a
+          - arm64-v8a,armeabi-v7a
+          - armeabi-v7a,arm64-v8a,x86,x86_64
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      # Metro fige les EXPO_PUBLIC_* dans le bundle au moment de la
+      # compilation : c'est ici, et nulle part apres, que se decide l'API que
+      # l'APK interrogera.
+      EXPO_PUBLIC_API_URL: ${{ inputs.api_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Met en cache les dependances Gradle : le premier build est long, les
+      # suivants beaucoup moins.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # A la racine : les workspaces npm remontent les dependances, et
+      # apps/mobile seul ne suffirait pas.
+      - name: Installer les dependances
+        run: npm ci
+
+      - name: Generer le projet Android
+        working-directory: apps/mobile
+        # --no-install : npm ci vient de le faire, et laisser prebuild relancer
+        # une installation casserait la remontee des workspaces.
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Compiler l'APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=${{ inputs.architectures }} --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: five-apk-${{ github.run_number }}
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      # Un APK ne dit pas de lui-meme a quelle API il parle : sans ce resume,
+      # impossible de savoir ce qu'on vient d'installer.
+      - name: Resume
+        run: |
+          {
+            echo "### APK Android"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| API | \`${{ inputs.api_url }}\` |"
+            echo "| ABI | \`${{ inputs.architectures }}\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo ""
+            echo "Telecharger \`five-apk-${{ github.run_number }}\` ci-dessous, dezipper, transferer l'APK sur le telephone."
+            echo ""
+            echo "> Signe avec la cle de debug du gabarit Expo : bon pour tester, a ne pas publier."
+          } >> "$GITHUB_STEP_SUMMARY"

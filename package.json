@@ -1,0 +1,15 @@
+{
+  "name": "five",
+  "version": "1.0.0",
+  "description": "Five/Futsal — monorepo (backend, app web + iOS + Android)",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "mobile": "npm run start --workspace five-mobile",
+    "web": "npm run web --workspace five-mobile"
+  }
+}

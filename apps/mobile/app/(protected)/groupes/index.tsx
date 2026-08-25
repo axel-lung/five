@@ -1,0 +1,75 @@
+import React, { useEffect, useState } from 'react';
+import { Text, View } from 'react-native';
+import { api } from 'five-api-client';
+import { Alert, Card, Loading, PageTitle } from 'five-ui';
+import Screen from '../../../components/Screen';
+import { LinkButton, LinkCard } from '../../../components/links';
+
+export default function Groups() {
+  const [groups, setGroups] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get('/groups')
+      .then((res) => setGroups(res.data))
+      .catch((err) => setError(err.response?.data?.message ?? 'Chargement impossible'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <Loading />;
+
+  const mine = groups.filter((g) => g.isMember);
+  const others = groups.filter((g) => !g.isMember);
+
+  const row = (group: any) => (
+    <LinkCard key={group.id} href={`/groupes/${group.id}`}>
+      <Text className="font-semibold text-gray-900">{group.name}</Text>
+      {group.city ? <Text className="text-sm text-gray-600">{group.city}</Text> : null}
+    </LinkCard>
+  );
+
+  return (
+    <Screen>
+      <PageTitle subtitle="Vos groupes, et les groupes publics près de chez vous.">
+        Groupes
+      </PageTitle>
+
+      {error ? (
+        <View className="mb-4">
+          <Alert kind="error">{error}</Alert>
+        </View>
+      ) : null}
+
+      <LinkButton href="/groupes/nouveau" className="mb-6">
+        Créer un groupe
+      </LinkButton>
+
+      {mine.length === 0 && others.length === 0 ? (
+        <Card>
+          <Text className="text-gray-600">
+            Aucun groupe pour l'instant. Créez le vôtre, ou demandez un lien d'invitation à un
+            organisateur.
+          </Text>
+        </Card>
+      ) : (
+        <>
+          {mine.length > 0 ? (
+            <View className="mb-8">
+              <Text className="text-lg font-bold text-gray-900 mb-3">Mes groupes</Text>
+              <View className="gap-3">{mine.map(row)}</View>
+            </View>
+          ) : null}
+
+          {others.length > 0 ? (
+            <View>
+              <Text className="text-lg font-bold text-gray-900 mb-3">Groupes publics</Text>
+              <View className="gap-3">{others.map(row)}</View>
+            </View>
+          ) : null}
+        </>
+      )}
+    </Screen>
+  );
+}

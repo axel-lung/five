@@ -1,0 +1,19 @@
+node_modules/
+.expo/
+.expo-shared/
+dist/
+
+# Projets natifs regeneres a chaque build par `expo prebuild` : les versionner
+# ferait diverger la configuration native de app.json, qui en est la source.
+android/
+ios/
+
+.env
+.env.local
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
