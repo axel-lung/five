@@ -18,6 +18,18 @@ export interface StoredObject {
 export interface Storage {
   save(body: Buffer, contentType: string, extension: string): Promise<string>;
   get(key: string): Promise<StoredObject | null>;
+  /**
+   * Supprime un objet pour de bon.
+   *
+   * Indispensable des lors qu'un media peut etre supprime par son auteur
+   * (S-01, images du chat) : GET /api/media/:key est une route publique, donc
+   * qui a vu l'URL la garde. Sans cette suppression, « effacer ma photo »
+   * n'effacerait que la reference, jamais la photo.
+   *
+   * Silencieuse sur une cle absente : la suppression d'un message est
+   * idempotente, et rejouer une suppression ne doit pas echouer.
+   */
+  delete(key: string): Promise<void>;
 }
 
 /**
@@ -37,6 +49,10 @@ const memoryStorage = (): Storage => {
     },
     async get(key) {
       return objects.get(key) ?? null;
+    },
+
+    async delete(key) {
+      objects.delete(key);
     },
   };
 };
@@ -95,6 +111,18 @@ const s3Storage = (): Storage => {
         };
       } catch {
         return null;
+      }
+    },
+
+    async delete(key) {
+      await ensureBucket();
+      // deleteObject de S3 reussit deja sur une cle absente ; le catch couvre
+      // le reste, car echouer a nettoyer un objet ne doit pas faire echouer la
+      // suppression du message qui le portait.
+      try {
+        await client.deleteObject({ Bucket: env.mediaBucket, Key: key }).promise();
+      } catch {
+        // Objet orphelin plutot que suppression refusee.
       }
     },
   };

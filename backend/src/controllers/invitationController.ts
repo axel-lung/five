@@ -7,21 +7,10 @@ import {
   sequelize,
 } from '../models';
 import { isBlockedBetween } from './moderationController';
+import { requireGroupAdmin } from '../utils/groupAccess';
+import { dropFromRoom, refreshMembership } from '../ws';
 
 const DEFAULT_TTL_DAYS = 7;
-
-/** Owner et admin peuvent inviter ; un simple membre non (G-03). */
-const requireGroupAdmin = async (groupId: string, userId: string, t?: any) => {
-  const membership = await GroupMember.findOne({
-    where: { groupId, userId },
-    transaction: t,
-  });
-
-  if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
-    return null;
-  }
-  return membership;
-};
 
 /** G-02 : creer un lien d'invitation. */
 export const createInvitation = async (req: Request, res: Response, next: NextFunction) => {
@@ -153,6 +142,12 @@ export const acceptInvitation = async (req: Request, res: Response, next: NextFu
       return res.status(result.error.code).json({ message: result.error.message });
     }
 
+    // S-01 : le nouveau membre doit recevoir le chat immediatement, sans
+    // avoir a rouvrir l'application.
+    if (!result.alreadyMember) {
+      await refreshMembership((req as any).user.id);
+    }
+
     res.status(result.alreadyMember ? 200 : 201).json({
       message: result.alreadyMember ? 'Already a member of this group' : 'Joined the group',
       groupId: result.groupId,
@@ -246,6 +241,10 @@ export const leaveGroup = async (req: Request, res: Response, next: NextFunction
     if (deleted === 0) {
       return res.status(404).json({ message: 'You are not a member of this group' });
     }
+
+    // S-01 : quitter un groupe coupe aussi son chat, sans attendre la
+    // revalidation periodique du WebSocket.
+    dropFromRoom(groupId, userId);
 
     res.json({ message: 'You have left the group' });
   } catch (error) {

@@ -25,7 +25,22 @@ export default function Groups() {
 
   const row = (group: any) => (
     <LinkCard key={group.id} href={`/groupes/${group.id}`}>
-      <Text className="font-semibold text-gray-900">{group.name}</Text>
+      <View className="flex-row items-start justify-between gap-2">
+        <Text className="font-semibold text-gray-900 flex-1">{group.name}</Text>
+
+        {/* S-01 : messages non lus du chat de ce groupe. La donnee vient de
+            GET /groups, deja appele ici : pas d'aller-retour de plus. */}
+        {group.unreadCount > 0 ? (
+          <View
+            accessibilityLabel={`${group.unreadCount} messages non lus`}
+            className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-600 items-center justify-center"
+          >
+            <Text className="text-white text-xs font-bold">
+              {group.unreadCount > 99 ? '99+' : group.unreadCount}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       {group.city ? <Text className="text-sm text-gray-600">{group.city}</Text> : null}
     </LinkCard>
   );

@@ -26,8 +26,18 @@ import {
   createInvitationSchema,
   updateMemberRoleSchema,
   transferOwnershipSchema,
+  sendGroupMessageSchema,
+  markChatReadSchema,
 } from '../utils/validationSchemas';
-import { createLimiter } from '../middleware/rateLimit';
+import {
+  listMessages,
+  sendMessage,
+  deleteMessage,
+  markChatRead,
+  getUnreadCounts,
+  sendImageMessage,
+} from '../controllers/groupChatController';
+import { createLimiter, chatLimiter, chatImageLimiter } from '../middleware/rateLimit';
 import { uploadGroupAvatar } from '../controllers/mediaController';
 import { uploadImage } from '../middleware/upload';
 
@@ -44,6 +54,12 @@ router.use(authenticateToken);
 // Invitations (avant /:id pour la meme raison d'ordre de matching)
 router.post('/invitations/:token/accept', acceptInvitation);
 router.delete('/invitations/:invitationId', revokeInvitation);
+
+// S-01 : compteur global de non-lus du chat, pour la pastille de navigation.
+// Segment litteral, donc AVANT les routes '/:id' : sinon 'unread' serait pris
+// pour un identifiant de groupe et capture par GET /:id — exactement le meme
+// piege que /invitations ci-dessus.
+router.get('/unread', getUnreadCounts);
 
 // Group management routes
 router.post('/', validateRequest(createGroupSchema), createGroup);
@@ -69,5 +85,12 @@ router.post('/:id/transfer-ownership', validateRequest(transferOwnershipSchema),
 // Invitations rattachees a un groupe
 router.post('/:id/invitations', createLimiter, validateRequest(createInvitationSchema), createInvitation);
 router.get('/:id/invitations', listInvitations);
+
+// S-01 : chat de groupe. Reserve aux membres, y compris en groupe public.
+router.get('/:id/messages', listMessages);
+router.post('/:id/messages', chatLimiter, validateRequest(sendGroupMessageSchema), sendMessage);
+router.post('/:id/messages/image', chatImageLimiter, uploadImage('image'), sendImageMessage);
+router.post('/:id/messages/read', validateRequest(markChatReadSchema), markChatRead);
+router.delete('/:id/messages/:messageId', deleteMessage);
 
 export default router;

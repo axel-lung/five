@@ -197,12 +197,23 @@ const GroupDetail: React.FC = () => {
       )}
 
       {myRole && (
-        <Link
-          to={`/sessions/nouvelle?groupId=${group.id}`}
-          className="min-h-[44px] flex items-center justify-center rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition mb-6"
-        >
-          Créer une session pour ce groupe
-        </Link>
+        <div className="space-y-3 mb-6">
+          <Link
+            to={`/sessions/nouvelle?groupId=${group.id}`}
+            className="min-h-[44px] flex items-center justify-center rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition"
+          >
+            Créer une session pour ce groupe
+          </Link>
+
+          {/* S-01 : le chat n'est pas une entite a creer, il existe des la
+              creation du groupe — y compris pour les groupes anterieurs. */}
+          <Link
+            to={`/groupes/${group.id}/chat`}
+            className="min-h-[44px] flex items-center justify-center rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
+          >
+            Ouvrir la discussion
+          </Link>
+        </div>
       )}
 
       {/* G-01 : identite du groupe, reservee aux administrateurs. */}

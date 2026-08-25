@@ -16,7 +16,13 @@
       "expo-router",
       "expo-secure-store",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HighFive accède à vos photos pour les partager dans la discussion de votre groupe."
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,

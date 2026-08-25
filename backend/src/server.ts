@@ -2,6 +2,7 @@ import { app } from './app';
 import { env } from './config/env';
 import { sequelize } from './models/index';
 import { migrator } from './db/migrator';
+import { attachChatSocket } from './ws';
 
 const PORT = env.port;
 
@@ -22,9 +23,13 @@ const startServer = async () => {
         : 'Database schema is up to date.'
     );
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
+
+    // S-01 : chat temps reel. Attache ici et non dans app.ts, qui doit rester
+    // sans ecoute reseau pour supertest.
+    attachChatSocket(server);
   } catch (error) {
     console.error('Unable to connect to the database:', error);
     process.exit(1);

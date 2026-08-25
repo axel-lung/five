@@ -3,8 +3,8 @@ import { Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { api, mediaSrc, useCurrentUser } from 'five-api-client';
 import { Alert, Avatar, Card, Input, Loading, PageTitle } from 'five-ui';
-import Screen from '../../../components/Screen';
-import { LinkButton, LinkCard } from '../../../components/links';
+import Screen from '../../../../components/Screen';
+import { LinkButton, LinkCard } from '../../../../components/links';
 
 const roleLabels: Record<string, string> = {
   owner: 'Propriétaire',
@@ -85,9 +85,17 @@ export default function GroupDetail() {
       ) : null}
 
       {myRole ? (
-        <LinkButton href={`/sessions/nouvelle?groupId=${group.id}`} className="mb-6">
-          Créer une session pour ce groupe
-        </LinkButton>
+        <View className="gap-3 mb-6">
+          <LinkButton href={`/sessions/nouvelle?groupId=${group.id}`}>
+            Créer une session pour ce groupe
+          </LinkButton>
+
+          {/* S-01 : le chat n'est pas une entite a creer, il existe des la
+              creation du groupe — y compris pour les groupes anterieurs. */}
+          <LinkButton href={`/groupes/${group.id}/chat`} variant="secondary">
+            Ouvrir la discussion
+          </LinkButton>
+        </View>
       ) : null}
 
       {/* TODO Phase 2 : identite du groupe (G-01), liens d'invitation (G-02),

@@ -103,3 +103,45 @@ export const watchErrors = (page: Page) => {
   page.on('pageerror', (e) => errors.push(e.message));
   return errors;
 };
+
+/**
+ * Genere un lien d'invitation et renvoie son jeton.
+ *
+ * Attend d'abord la carte d'invitation : elle n'apparait qu'une fois la liste
+ * des membres chargee, seule source du role de l'appelant.
+ */
+export const inviteToken = async (owner: Page) => {
+  await expect(owner.getByText('Inviter des joueurs')).toBeVisible();
+
+  const generate = owner.getByRole('button', { name: "Générer un lien d'invitation" });
+  if (await generate.count()) await generate.click();
+  await expect(owner.getByRole('button', { name: 'Partager' })).toBeVisible();
+
+  return owner.evaluate(async () => {
+    const id = window.location.pathname.split('/').pop();
+    const res = await fetch(`http://localhost:3001/api/groups/${id}/invitations`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+    });
+    return (await res.json()).find((i: any) => i.usable).token;
+  });
+};
+
+/** Un groupe, son proprietaire et un membre simple. */
+export const groupWithMember = async (browser: any) => {
+  const ownerCtx = await browser.newContext();
+  const owner = await ownerCtx.newPage();
+  await register(owner, account('Sebastien'));
+  const groupUrl = await createGroup(owner, 'Les Rémois');
+
+  const token = await inviteToken(owner);
+
+  const memberCtx = await browser.newContext();
+  const member = await memberCtx.newPage();
+  const memberAccount = account('Lucas');
+  await register(member, memberAccount);
+  await member.goto(`/invitation/${token}`);
+  await member.getByRole('button', { name: 'Rejoindre le groupe' }).click();
+  await member.waitForURL(groupUrl);
+
+  return { ownerCtx, owner, memberCtx, member, groupUrl, memberAccount };
+};

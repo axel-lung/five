@@ -6,6 +6,8 @@ import { Event } from './event';
 import { EventInscription } from './eventInscription';
 import { GroupMember } from './groupMember';
 import { GroupInvitation } from './groupInvitation';
+import { GroupMessage } from './groupMessage';
+import { GroupMessageRead } from './groupMessageRead';
 import { UserBlock } from './userBlock';
 import { Report } from './report';
 import { BugReport } from './bugReport';
@@ -33,6 +35,8 @@ export const EventModel = Event.initModel(sequelize);
 export const EventInscriptionModel = EventInscription.initModel(sequelize);
 export const GroupMemberModel = GroupMember.initModel(sequelize);
 export const GroupInvitationModel = GroupInvitation.initModel(sequelize);
+export const GroupMessageModel = GroupMessage.initModel(sequelize);
+export const GroupMessageReadModel = GroupMessageRead.initModel(sequelize);
 export const UserBlockModel = UserBlock.initModel(sequelize);
 export const ReportModel = Report.initModel(sequelize);
 export const BugReportModel = BugReport.initModel(sequelize);
@@ -104,6 +108,9 @@ GroupInvitation.associate = ({ Group, User }) => {
   GroupInvitation.belongsTo(User, { foreignKey: 'createdBy', as: 'inviter' });
 };
 
+// Volontairement pas de Group.hasMany(GroupMessage) : rien n'en a besoin, et
+// Group.associate porte encore le `through` fragile documente plus haut.
+
 // Call associate methods after all models are defined
 User.associate({ Group: GroupModel, Event: EventModel, EventInscription: EventInscriptionModel, GroupMember: GroupMemberModel });
 Group.associate({ User: UserModel, Event: EventModel, GroupMember: GroupMemberModel });
@@ -111,6 +118,8 @@ Event.associate({ User: UserModel, Group: GroupModel, EventInscription: EventIns
 EventInscription.associate({ Event: EventModel, User: UserModel });
 GroupMember.associate({ Group: GroupModel, User: UserModel });
 GroupInvitation.associate({ Group: GroupModel, User: UserModel });
+GroupMessage.associate({ GroupModel, UserModel });
+GroupMessageRead.associate({ GroupModel, UserModel });
 UserBlock.associate({ UserModel });
 Report.associate({ UserModel });
 BugReport.associate({ UserModel });

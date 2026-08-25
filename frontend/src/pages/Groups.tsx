@@ -56,7 +56,20 @@ const Groups: React.FC = () => {
                 {mine.map((group) => (
                   <Link key={group.id} to={`/groupes/${group.id}`} className="block">
                     <Card className="hover:border-green-400 transition">
-                      <h3 className="font-semibold text-gray-900">{group.name}</h3>
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-gray-900">{group.name}</h3>
+
+                        {/* S-01 : messages non lus du chat de ce groupe. */}
+                        {group.unreadCount > 0 && (
+                          <span
+                            className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-600 text-white
+                                       text-xs font-bold flex items-center justify-center shrink-0"
+                            aria-label={`${group.unreadCount} messages non lus`}
+                          >
+                            {group.unreadCount > 99 ? '99+' : group.unreadCount}
+                          </span>
+                        )}
+                      </div>
                       {group.city && <p className="text-sm text-gray-600">{group.city}</p>}
                     </Card>
                   </Link>

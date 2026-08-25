@@ -8,6 +8,7 @@ import Groups from './pages/Groups';
 import CreateGroup from './pages/CreateGroup';
 import CreateEvent from './pages/CreateEvent';
 import GroupDetail from './pages/GroupDetail';
+import GroupChat from './pages/GroupChat';
 import EventDetail from './pages/EventDetail';
 import JoinGroup from './pages/JoinGroup';
 import SharedEvent from './pages/SharedEvent';
@@ -50,6 +51,7 @@ function App() {
             <Route path="/groupes" element={<Groups />} />
             <Route path="/groupes/nouveau" element={<CreateGroup />} />
             <Route path="/groupes/:groupId" element={<GroupDetail />} />
+            <Route path="/groupes/:groupId/chat" element={<GroupChat />} />
             <Route path="/sessions/nouvelle" element={<CreateEvent />} />
             <Route path="/sessions/:eventId" element={<EventDetail />} />
             <Route path="/notifications" element={<Notifications />} />

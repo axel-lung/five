@@ -38,6 +38,24 @@ export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
   return payload as RefreshTokenPayload;
 };
 
+/**
+ * Verifie un access token et renvoie son porteur, ou null.
+ *
+ * Extrait du middleware pour que le WebSocket (src/ws) authentifie ses
+ * connexions avec exactement la meme regle — notamment le refus d'un refresh
+ * token la ou un access token est attendu. Une seconde copie de cette
+ * verification finirait par diverger de celle-ci.
+ */
+export const verifyAccessToken = (token: string): { id: string; email: string } | null => {
+  try {
+    const payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
+    if (payload.type !== 'access') return null;
+    return { id: payload.id, email: payload.email };
+  } catch {
+    return null;
+  }
+};
+
 // JWT authentication middleware
 export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
@@ -47,16 +65,11 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     return res.status(401).json({ message: 'Authentication required' });
   }
 
-  try {
-    const payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
-
-    if (payload.type !== 'access') {
-      return res.status(401).json({ message: 'Invalid token type' });
-    }
-
-    (req as any).user = { id: payload.id, email: payload.email };
-    next();
-  } catch {
+  const user = verifyAccessToken(token);
+  if (!user) {
     return res.status(401).json({ message: 'Invalid or expired token' });
   }
+
+  (req as any).user = user;
+  next();
 };

@@ -3,13 +3,9 @@ import { GroupModel as Group, UserModel as User, GroupMemberModel as GroupMember
 import { Op } from 'sequelize';
 import { PUBLIC_USER_ATTRIBUTES } from '../utils/publicAttributes';
 import { createGroupSchema } from '../utils/validationSchemas';
-
-/** Un groupe prive n'est lisible que par ses membres (G-06). */
-const canViewGroup = async (group: any, userId: string): Promise<boolean> => {
-  if (group.accessType === 'public') return true;
-  const membership = await GroupMember.findOne({ where: { groupId: group.id, userId } });
-  return membership !== null;
-};
+import { canViewGroup } from '../utils/groupAccess';
+import { unreadCountsFor } from './groupChatController';
+import { dropFromRoom, closeRoom } from '../ws';
 
 // Create a new group
 export const createGroup = async (req: Request, res: Response, next: NextFunction) => {
@@ -83,10 +79,16 @@ export const getGroups = async (req: Request, res: Response, next: NextFunction)
 
     const memberGroupIdSet = new Set(memberGroupIds);
 
+    // S-01 : les non-lus du chat voyagent avec la liste plutot que par un
+    // appel dedie — c'est le seul ecran qui les affiche, et une requete
+    // groupee coute moins qu'un aller-retour de plus.
+    const unread = await unreadCountsFor(userId);
+
     res.json(
       groups.map((group: any) => ({
         ...group.toJSON(),
         isMember: memberGroupIdSet.has(group.id),
+        unreadCount: unread[group.id] ?? 0,
       }))
     );
   } catch (error) {
@@ -179,6 +181,8 @@ export const deleteGroup = async (req: Request, res: Response, next: NextFunctio
     }
 
     await group.destroy();
+    closeRoom(group.id);
+
     res.json({ message: 'Group deleted successfully' });
   } catch (error) {
     next(error);
@@ -268,6 +272,11 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     await GroupMember.destroy({
       where: { groupId: group.id, userId: memberId }
     });
+
+    // S-01 : la personne exclue doit cesser de recevoir la conversation tout
+    // de suite. La revalidation periodique du WebSocket ne suffirait pas — on
+    // ne l'exclut pas d'un groupe pour qu'elle en lise encore cinq minutes.
+    dropFromRoom(group.id, memberId);
 
     res.json({ message: 'Member removed successfully' });
   } catch (error) {

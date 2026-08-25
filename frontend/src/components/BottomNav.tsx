@@ -42,13 +42,19 @@ const Item: React.FC<{ tab: Tab }> = ({ tab }) => (
   </NavLink>
 );
 
-export const BottomNav: React.FC<{ unread?: number; isAdmin?: boolean }> = ({
-  unread = 0,
-  isAdmin = false,
-}) => {
+/**
+ * `chatUnread` est une prop a part et non un reemploi de `unread` : les deux
+ * compteurs viennent de sources differentes (le centre de notifications d'un
+ * cote, le chat de l'autre) et se marquent comme lus independamment.
+ */
+export const BottomNav: React.FC<{
+  unread?: number;
+  chatUnread?: number;
+  isAdmin?: boolean;
+}> = ({ unread = 0, chatUnread = 0, isAdmin = false }) => {
   const tabs: Tab[] = [
     { to: '/dashboard', label: 'Sessions', icon: '⚽' },
-    { to: '/groupes', label: 'Groupes', icon: '👥' },
+    { to: '/groupes', label: 'Groupes', icon: '👥', badge: chatUnread },
     { to: '/notifications', label: 'Alertes', icon: '🔔', badge: unread },
     { to: '/profil', label: 'Profil', icon: '👤' },
   ];

@@ -47,10 +47,21 @@ const DB_PORT = 55440;
   const { app } = await import('./src/app');
   const port = Number(process.env.PORT ?? 3001);
 
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`API prete sur http://localhost:${port}`);
     console.log('Frontend : VITE_APP_API_URL=http://localhost:3001/api npm run dev');
   });
+
+  // Le chat temps reel doit etre attache ICI AUSSI, et pas seulement dans
+  // server.ts : c'est ce point d'entree que Playwright demarre, et sans lui
+  // l'assertion « le message apparait sans rechargement » passerait pour la
+  // mauvaise raison.
+  //
+  // Import paresseux et non en tete de fichier : src/ws importe
+  // transitivement config/env, qui exige DATABASE_URL — variable que ce
+  // script ne pose qu'a l'execution, quelques lignes plus haut.
+  const { attachChatSocket } = await import('./src/ws');
+  attachChatSocket(server);
 
   const stop = async () => {
     await pg.stop();

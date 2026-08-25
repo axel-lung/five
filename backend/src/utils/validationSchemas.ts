@@ -162,3 +162,33 @@ export const updateBugReportSchema = Joi.object({
   status: Joi.string().valid('open', 'investigating', 'fixed', 'dismissed').required(),
   resolutionNote: Joi.string().max(1000).optional(),
 });
+
+// S-01 : chat de groupe.
+//
+// 2000 caracteres : assez pour un vrai message, assez peu pour que la ligne
+// et la trame WebSocket restent bon marche.
+export const sendGroupMessageSchema = Joi.object({
+  body: Joi.string().trim().min(1).max(2000).required(),
+  // Rend le renvoi idempotent : le client rejoue le meme nonce apres une
+  // coupure, et le serveur renvoie le message deja enregistre au lieu d'en
+  // creer un second.
+  clientNonce: Joi.string().uuid().optional(),
+});
+
+// Deux modes de lecture exclusifs : la pagination vers le passe (`before`),
+// et le rattrapage apres reconnexion (`since`). Les melanger n'aurait pas de
+// sens, d'ou `oxor` ; et un curseur keyset sans son departage sauterait des
+// lignes, d'ou `and`.
+export const listGroupMessagesSchema = Joi.object({
+  before: Joi.date().iso(),
+  beforeId: Joi.string().uuid(),
+  since: Joi.date().iso(),
+  limit: Joi.number().integer().min(1).max(100).default(30),
+})
+  .oxor('before', 'since')
+  .and('before', 'beforeId');
+
+// `upTo` optionnel : sans lui, on marque lu jusqu'a maintenant.
+export const markChatReadSchema = Joi.object({
+  upTo: Joi.date().iso().optional(),
+});

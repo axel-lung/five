@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { AppState, Text, View } from 'react-native';
 import { Link, Redirect, Tabs, usePathname } from 'expo-router';
-import { api, useHasSession, useProfile } from 'five-api-client';
+import { api, createChatSocket, useHasSession, useProfile } from 'five-api-client';
 import { eventBus, Loading } from 'five-ui';
 import BugReportButton from '../../components/BugReportButton';
 import BottomNav from '../../components/BottomNav';
@@ -24,6 +24,7 @@ export default function ProtectedLayout() {
   const { checking, authenticated } = useHasSession();
   const { profile } = useProfile();
   const [unread, setUnread] = useState(0);
+  const [chatUnread, setChatUnread] = useState(0);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -39,6 +40,71 @@ export default function ProtectedLayout() {
     refresh();
     eventBus.on('notifications:refresh', refresh);
     return () => eventBus.off('notifications:refresh', refresh);
+  }, [authenticated]);
+
+  /**
+   * S-01 : une seule socket de chat pour toute l'application, tenue ici.
+   *
+   * Une socket par ecran rouvrirait une connexion a chaque navigation, et
+   * surtout ne pousserait rien quand aucun chat n'est ouvert — or c'est
+   * justement quand la pastille doit bouger. Les trames sont rediffusees par
+   * l'eventBus, deja en place pour le badge des notifications.
+   */
+  useEffect(() => {
+    if (!authenticated) return undefined;
+
+    const refreshChatUnread = () => {
+      api
+        .get('/groups/unread')
+        .then((res) => setChatUnread(res.data.total ?? 0))
+        .catch(() => setChatUnread(0));
+    };
+
+    refreshChatUnread();
+    eventBus.on('chat:unread', refreshChatUnread);
+
+    const socket = createChatSocket({
+      onFrame: (frame) => {
+        if (frame.type === 'ready') {
+          eventBus.emit('chat:ready');
+          refreshChatUnread();
+          return;
+        }
+
+        if (frame.type === 'message') {
+          eventBus.emit('chat:message', {
+            groupId: frame.message.groupId,
+            message: frame.message,
+          });
+          // Incremente localement plutot que de rappeler l'API : un groupe
+          // bavard ferait sinon un aller-retour HTTP par message. L'ecran de
+          // chat ouvert corrige le compteur en marquant comme lu.
+          setChatUnread((count) => count + 1);
+          return;
+        }
+
+        if (frame.type === 'message.deleted') {
+          eventBus.emit('chat:deleted', {
+            groupId: frame.message.groupId,
+            message: frame.message,
+          });
+        }
+      },
+    });
+
+    // Retour au premier plan : reconnexion immediate, sans attendre le palier
+    // de backoff. En arriere-plan la socket est mise en veille — iOS la
+    // couperait de toute facon, autant le faire proprement.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') socket.reconnectNow();
+      else socket.suspend();
+    });
+
+    return () => {
+      subscription.remove();
+      eventBus.off('chat:unread', refreshChatUnread);
+      socket.close();
+    };
   }, [authenticated]);
 
   // Le coffre natif est asynchrone : tant qu'il n'a pas repondu, rediriger
@@ -80,7 +146,7 @@ export default function ProtectedLayout() {
         <BugReportButton />
       </View>
 
-      <BottomNav unread={unread} isAdmin={profile?.role === 'admin'} />
+      <BottomNav unread={unread} chatUnread={chatUnread} isAdmin={profile?.role === 'admin'} />
     </View>
   );
 }

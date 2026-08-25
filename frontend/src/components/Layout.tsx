@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import api from '../services/api';
 import { useProfile } from '../services/session';
+import { createChatSocket } from '../services/chatSocket';
 import BottomNav from './BottomNav';
 import BugReportButton from './BugReportButton';
 import logo from '../assets/highfive_logo.png';
@@ -21,6 +22,7 @@ import logo from '../assets/highfive_logo.png';
 export const Layout: React.FC = () => {
   const { profile } = useProfile();
   const [unread, setUnread] = useState(0);
+  const [chatUnread, setChatUnread] = useState(0);
 
   useEffect(() => {
     const refresh = () => {
@@ -35,6 +37,65 @@ export const Layout: React.FC = () => {
     return () => window.removeEventListener('notifications:refresh', refresh);
   }, []);
 
+  /**
+   * S-01 : une seule socket de chat pour toute l'application, tenue ici.
+   *
+   * Une socket par ecran de chat rouvrirait une connexion a chaque navigation,
+   * et surtout ne saurait rien pousser quand aucun chat n'est ouvert — or
+   * c'est precisement quand la pastille doit bouger.
+   *
+   * Les trames sont rediffusees en CustomEvent : c'est l'idiome deja en place
+   * ici pour `notifications:refresh`, et il evite d'introduire un contexte
+   * React pour trois evenements.
+   */
+  useEffect(() => {
+    const refreshChatUnread = () => {
+      api
+        .get('/groups/unread')
+        .then((res) => setChatUnread(res.data.total ?? 0))
+        .catch(() => setChatUnread(0));
+    };
+
+    refreshChatUnread();
+    window.addEventListener('chat:unread', refreshChatUnread);
+
+    const socket = createChatSocket({
+      onFrame: (frame) => {
+        if (frame.type === 'ready') {
+          window.dispatchEvent(new CustomEvent('chat:ready'));
+          refreshChatUnread();
+          return;
+        }
+
+        if (frame.type === 'message') {
+          window.dispatchEvent(
+            new CustomEvent('chat:message', {
+              detail: { groupId: frame.message.groupId, message: frame.message },
+            })
+          );
+          // Incremente localement plutot que de rappeler l'API : un groupe
+          // bavard ferait sinon un aller-retour HTTP par message. L'ecran de
+          // chat ouvert corrige le compteur en marquant comme lu.
+          setChatUnread((count) => count + 1);
+          return;
+        }
+
+        if (frame.type === 'message.deleted') {
+          window.dispatchEvent(
+            new CustomEvent('chat:deleted', {
+              detail: { groupId: frame.message.groupId, message: frame.message },
+            })
+          );
+        }
+      },
+    });
+
+    return () => {
+      window.removeEventListener('chat:unread', refreshChatUnread);
+      socket.close();
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="bg-gray-900 text-white">
@@ -45,7 +106,7 @@ export const Layout: React.FC = () => {
         </div>
       </header>
 
-      <BottomNav unread={unread} isAdmin={profile?.role === 'admin'} />
+      <BottomNav unread={unread} chatUnread={chatUnread} isAdmin={profile?.role === 'admin'} />
 
       {/* pb-24 : reserve la hauteur de la barre d'onglets, fixee en bas sur
           telephone, qui masquerait sinon le dernier bouton de la page. */}

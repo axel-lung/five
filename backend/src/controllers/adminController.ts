@@ -11,6 +11,7 @@ import {
   AuditLogModel as AuditLog,
 } from '../models';
 import { audit } from '../services/audit';
+import { disconnectUser } from '../ws';
 
 /** Colonnes qu'un administrateur peut voir sur un compte, hors secrets. */
 const ADMIN_USER_ATTRIBUTES = [
@@ -152,6 +153,11 @@ export const suspendUser = async (req: Request, res: Response, next: NextFunctio
 
     await user.update({ suspendedAt: new Date(), suspensionReason: reason } as any);
     await audit(adminId, 'admin.user.suspend', 'user', user.id, { reason });
+
+    // S-01 : authenticateToken ne relit jamais la base, la socket de chat d'un
+    // compte suspendu continuerait donc d'ecouter jusqu'a l'expiration de son
+    // jeton. On la ferme.
+    disconnectUser(user.id);
 
     res.json({ message: 'User suspended' });
   } catch (error) {

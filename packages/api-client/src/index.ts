@@ -8,6 +8,13 @@ export {
   setOnSessionExpired,
 } from './client';
 export { mediaSrc } from './media';
+export {
+  createChatSocket,
+  CHAT_SOCKET_PATH,
+  type ChatSocket,
+  type ServerFrame,
+  type SocketStatus,
+} from './chatSocket';
 export { sessionStorage } from './sessionStorage';
 export { useCurrentUser } from './useCurrentUser';
 export { useHasSession } from './useHasSession';

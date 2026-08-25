@@ -11,6 +11,8 @@ const TABLES = [
   'event_inscriptions',
   'events',
   'group_invitations',
+  'group_message_reads',
+  'group_messages',
   'group_members',
   'groups',
   'venues',
