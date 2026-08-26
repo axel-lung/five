@@ -69,6 +69,46 @@ If you uncommented the sample data in `init-scripts/db.init.sql`:
 | MinIO (API) | localhost:9000 | File storage (S3-compatible) |
 | MinIO Console | http://localhost:9001 | Web UI for MinIO |
 
+## Clients : qui fait quoi
+
+Deux clients, deux roles, et ce n'est pas un doublon :
+
+| Client | Cible | Portee |
+|--------|-------|--------|
+| `frontend/` | Web | Toute la V1, **back-office compris**. C'est lui que docker-compose deploie derriere Traefik. |
+| `apps/mobile` | iOS et Android | Le parcours joueur et organisateur. Expo sait aussi servir le web, mais ce n'est pas ce qui est deploye. |
+
+**Le back-office est web, deliberement.** On n'administre pas une plateforme
+depuis un telephone : le tableau de bord, la moderation, la recherche de
+comptes, le journal d'audit et le catalogue des complexes vivent sous
+`/admin` du client web, et n'ont pas d'equivalent mobile. Il n'y a donc rien
+a chercher de ce cote de l'application.
+
+L'acces exige le role `admin`, qui ne s'obtient par aucune route — ce serait
+une escalade de privileges a une requete. Il se donne en ligne de commande,
+depuis le serveur :
+
+```bash
+cd backend && npm run make-admin -- alice@example.com
+```
+
+## Notifications push (N-01)
+
+Le service Expo Push est gratuit et n'exige pas de cle. Pour qu'une
+notification atteigne reellement un telephone, il faut en revanche :
+
+1. un identifiant de projet EAS — `eas init` avec un compte Expo gratuit,
+   qui renseigne `extra.eas.projectId` dans `apps/mobile/app.json` ;
+2. un **appareil physique** : ni emulateur, ni simulateur ;
+3. sur Android, un **development build** (`npx expo run:android`), Expo Go
+   ne supportant plus les notifications distantes ;
+4. pour iOS, un compte Apple Developer payant, necessaire aux identifiants
+   APNs — et de toute facon a toute installation sur iPhone.
+
+Sans ces elements l'application fonctionne normalement, sans push, et le
+signale dans ses journaux. `EXPO_ACCESS_TOKEN` est facultatif : il empeche un
+tiers ayant capte un jeton d'appareil de vous usurper comme expediteur.
+
 ## API Endpoints
 
 ### Authentication

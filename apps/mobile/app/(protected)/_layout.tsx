@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppState, Text, View } from 'react-native';
 import { Link, Redirect, Tabs, usePathname } from 'expo-router';
-import { api, createChatSocket, useHasSession, useProfile } from 'five-api-client';
+import { api, createChatSocket, useHasSession } from 'five-api-client';
 import { eventBus, Loading } from 'five-ui';
 import BugReportButton from '../../components/BugReportButton';
 import BottomNav from '../../components/BottomNav';
@@ -23,7 +23,6 @@ import { SHELL_BACKGROUND } from '../../components/theme';
  */
 export default function ProtectedLayout() {
   const { checking, authenticated } = useHasSession();
-  const { profile } = useProfile();
   const [unread, setUnread] = useState(0);
   const [chatUnread, setChatUnread] = useState(0);
   const pathname = usePathname();
@@ -150,7 +149,7 @@ export default function ProtectedLayout() {
         <BugReportButton />
       </View>
 
-      <BottomNav unread={unread} chatUnread={chatUnread} isAdmin={profile?.role === 'admin'} />
+      <BottomNav unread={unread} chatUnread={chatUnread} />
     </View>
   );
 }
