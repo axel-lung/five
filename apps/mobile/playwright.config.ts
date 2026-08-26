@@ -8,8 +8,14 @@ import { defineConfig, devices } from '@playwright/test';
  * sans emulateur ni appareil.
  *
  * Limites a connaitre, et a ne pas confondre avec une validation complete :
- * le selecteur d'images natif et les notifications push ne fonctionnent pas
- * dans ce mode. Ces deux points ne se verifient que sur un appareil.
+ *
+ * - le selecteur d'images natif et les notifications push ne fonctionnent pas
+ *   dans ce mode ; ces deux points ne se verifient que sur un appareil ;
+ * - l'export web ne masque pas l'onglet quitte, si bien que deux ecrans
+ *   peuvent etre visibles en meme temps la ou react-navigation n'en montre
+ *   qu'un sur natif. Une assertion ne doit donc jamais reposer sur l'absence
+ *   ou l'invisibilite d'un ecran precedent : verifier l'effet reel — l'etat
+ *   cote API, ou la presence de ce que l'on attend.
  */
 export default defineConfig({
   testDir: './e2e',

@@ -9,12 +9,16 @@ import {
   confirmAsync,
   Field,
   formatDateTime,
+  Input,
   Loading,
   PageTitle,
+  parseLocalDateTime,
   Select,
   StatusBadge,
+  toLocalInput,
 } from 'five-ui';
 import ShareButton from '../../../components/ShareButton';
+import ReportDialog from '../../../components/ReportDialog';
 import Screen from '../../../components/Screen';
 
 /**
@@ -52,6 +56,9 @@ export default function EventDetail() {
   // transmission seule (« transfer »). Le meme panneau sert aux deux.
   const [handover, setHandover] = useState<'leave' | 'transfer' | null>(null);
   const [successorId, setSuccessorId] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [duplicateDate, setDuplicateDate] = useState('');
   const me = useCurrentUser();
 
   const load = useCallback(async () => {
@@ -236,20 +243,98 @@ export default function EventDetail() {
     }
   };
 
-  /** E-02 : un brouillon n'est pas encore partageable. */
-  const open = async () => {
+  /** Enveloppe commune : etat occupe, messages, rechargement. */
+  const run = async (action: () => Promise<void>, success?: string) => {
     setActing(true);
     setError(null);
     setNotice(null);
     try {
-      await api.patch(`/events/${eventId}/status`, { status: 'open' });
-      await load();
+      await action();
+      if (success) setNotice(success);
     } catch (err: any) {
-      setError(err.response?.data?.message ?? 'Changement de statut impossible');
+      const data = err.response?.data;
+      setError(data?.details?.[0] ?? data?.message ?? 'Action impossible');
     } finally {
       setActing(false);
     }
   };
+
+  /** E-02 : transitions pilotees par l'organisateur. */
+  const setStatus = (status: string, question?: string) =>
+    run(async () => {
+      if (question && !(await confirmAsync(question, { destructive: status === 'cancelled' }))) {
+        return;
+      }
+      await api.patch(`/events/${eventId}/status`, { status });
+      await load();
+    });
+
+  const open = () => setStatus('open');
+
+  /** E-01 : modifier la session. */
+  const startEditing = () => {
+    setDraft({
+      title: event.title,
+      dateTime: toLocalInput(event.dateTime),
+      location: event.location ?? '',
+      capacity: String(event.capacity),
+    });
+    setEditing(true);
+  };
+
+  const saveEvent = () =>
+    run(async () => {
+      const parsed = parseLocalDateTime(draft.dateTime ?? '');
+      if (!parsed) {
+        throw { response: { data: { message: 'Date invalide. Format attendu : 2026-08-27 19:30' } } };
+      }
+
+      const payload: Record<string, unknown> = {
+        title: draft.title,
+        dateTime: parsed.toISOString(),
+        capacity: Number(draft.capacity),
+      };
+      if (draft.location) payload.location = draft.location;
+      if (event.groupId) payload.groupId = event.groupId;
+      if (event.venueId) payload.venueId = event.venueId;
+
+      await api.put(`/events/${eventId}`, payload);
+      setEditing(false);
+      await load();
+    }, 'Session mise à jour.');
+
+  /**
+   * E-04 : recurrence par duplication.
+   *
+   * La copie nait en brouillon et sans inscription : c'est la validation
+   * humaine qu'exige le CCH.md, et reconduire les inscrits reviendrait a les
+   * engager sans leur demander.
+   */
+  const duplicate = () =>
+    run(async () => {
+      const parsed = parseLocalDateTime(duplicateDate);
+      if (!parsed) {
+        throw { response: { data: { message: 'Date invalide. Format attendu : 2026-08-27 19:30' } } };
+      }
+
+      const response = await api.post(`/events/${eventId}/duplicate`, {
+        dateTime: parsed.toISOString(),
+      });
+      router.replace(`/sessions/${response.data.id}`);
+    });
+
+  const removeEvent = () =>
+    run(async () => {
+      const ok = await confirmAsync('Supprimer cette session ? Les inscriptions seront perdues.', {
+        title: 'Supprimer la session',
+        confirmLabel: 'Supprimer',
+        destructive: true,
+      });
+      if (!ok) return;
+
+      await api.delete(`/events/${eventId}`);
+      router.replace('/dashboard');
+    });
 
   /**
    * Le meme panneau sert au depart et a la transmission seule. Il est rendu la
@@ -470,7 +555,12 @@ export default function EventDetail() {
         </View>
       ) : null}
 
-      {/* TODO Phase 2 : signalement de la session (ReportDialog). */}
+      {/* S-05 : signaler la session. L'organisateur n'a pas a se signaler. */}
+      {!isOrganizer ? (
+        <View className="mt-6">
+          <ReportDialog targetType="event" targetId={eventId} label="Signaler cette session" />
+        </View>
+      ) : null}
 
       {isOrganizer ? (
         <Card className="mt-6">
@@ -504,11 +594,128 @@ export default function EventDetail() {
             ) : null}
 
             {handover === 'transfer' ? handoverPanel : null}
-          </View>
 
-          {/* TODO Phase 2 : modification (E-01), duplication (E-04), passage en
-              terminee, annulation et suppression — toutes protegees par une
-              demande de confirmation. */}
+            {/* E-01 : modification. Repliee tant qu'elle ne sert pas, pour ne
+                pas noyer les actions courantes sous un formulaire. */}
+            {editing ? (
+              <Card>
+                <View className="gap-3">
+                  <Field label="Titre">
+                    <Input
+                      testID="event-edit-title"
+                      value={draft.title}
+                      onChangeText={(title: string) => setDraft((d) => ({ ...d, title }))}
+                    />
+                  </Field>
+
+                  <Field label="Date et heure">
+                    <Input
+                      testID="event-edit-datetime"
+                      value={draft.dateTime}
+                      onChangeText={(dateTime: string) => setDraft((d) => ({ ...d, dateTime }))}
+                      placeholder="2026-08-27 19:30"
+                    />
+                  </Field>
+
+                  <Field label="Lieu">
+                    <Input
+                      testID="event-edit-location"
+                      value={draft.location}
+                      onChangeText={(location: string) => setDraft((d) => ({ ...d, location }))}
+                    />
+                  </Field>
+
+                  <Field label="Nombre de places">
+                    <Input
+                      testID="event-edit-capacity"
+                      value={draft.capacity}
+                      onChangeText={(capacity: string) => setDraft((d) => ({ ...d, capacity }))}
+                      keyboardType="number-pad"
+                    />
+                  </Field>
+
+                  <Button onPress={saveEvent} disabled={acting} testID="event-edit-save" full>
+                    Enregistrer
+                  </Button>
+                  <Button variant="secondary" onPress={() => setEditing(false)} full>
+                    Annuler
+                  </Button>
+                </View>
+              </Card>
+            ) : !closed ? (
+              <Button
+                variant="secondary"
+                onPress={startEditing}
+                disabled={acting}
+                testID="event-edit"
+                full
+              >
+                Modifier la session
+              </Button>
+            ) : null}
+
+            {event.status === 'open' || event.status === 'full' ? (
+              <Button
+                variant="secondary"
+                disabled={acting}
+                onPress={() => setStatus('completed', 'Marquer cette session comme terminée ?')}
+                testID="event-complete"
+                full
+              >
+                Marquer comme terminée
+              </Button>
+            ) : null}
+
+            {/* E-04 : duplication, declenchee par l'organisateur. */}
+            <View className="pt-3 border-t border-gray-100 gap-2">
+              <Field
+                label="Dupliquer pour une autre date"
+                hint="La copie est créée en brouillon, sans les inscrits."
+              >
+                <Input
+                  testID="event-duplicate-date"
+                  value={duplicateDate}
+                  onChangeText={setDuplicateDate}
+                  placeholder="2026-09-03 19:30"
+                />
+              </Field>
+              <Button
+                variant="secondary"
+                onPress={duplicate}
+                disabled={acting || !duplicateDate}
+                testID="event-duplicate"
+                full
+              >
+                Dupliquer la session
+              </Button>
+            </View>
+
+            <View className="pt-3 border-t border-gray-100 gap-2">
+              {!closed ? (
+                <Button
+                  variant="danger"
+                  disabled={acting}
+                  onPress={() =>
+                    setStatus('cancelled', 'Annuler cette session ? Les inscrits seront prévenus.')
+                  }
+                  testID="event-cancel"
+                  full
+                >
+                  Annuler la session
+                </Button>
+              ) : null}
+
+              <Button
+                variant="danger"
+                onPress={removeEvent}
+                disabled={acting}
+                testID="event-delete"
+                full
+              >
+                Supprimer la session
+              </Button>
+            </View>
+          </View>
         </Card>
       ) : null}
     </Screen>

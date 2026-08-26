@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { api } from 'five-api-client';
 import { Alert, Card, Loading, PageTitle } from 'five-ui';
 import Screen from '../../../components/Screen';
@@ -10,13 +11,23 @@ export default function Groups() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api
-      .get('/groups')
-      .then((res) => setGroups(res.data))
-      .catch((err) => setError(err.response?.data?.message ?? 'Chargement impossible'))
-      .finally(() => setLoading(false));
-  }, []);
+  // Meme raison que sur le tableau de bord : revenir ici apres avoir quitte
+  // ou supprime un groupe doit relire la liste, pas montrer l'ancienne.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+
+      api
+        .get('/groups')
+        .then((res) => alive && setGroups(res.data))
+        .catch((err) => alive && setError(err.response?.data?.message ?? 'Chargement impossible'))
+        .finally(() => alive && setLoading(false));
+
+      return () => {
+        alive = false;
+      };
+    }, [])
+  );
 
   if (loading) return <Loading />;
 

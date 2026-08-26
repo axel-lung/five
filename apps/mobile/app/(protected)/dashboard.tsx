@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import { api, useCurrentUser } from 'five-api-client';
 import { Alert, Card, formatDateTime, Loading, PageTitle, StatusBadge } from 'five-ui';
 import Screen from '../../components/Screen';
@@ -13,24 +13,40 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [groupsRes, eventsRes] = await Promise.all([
-          api.get('/groups'),
-          api.get('/events'),
-        ]);
-        setGroups(groupsRes.data);
-        setEvents(eventsRes.data);
-      } catch (err: any) {
-        setError(err.response?.data?.message ?? 'Chargement impossible');
-      } finally {
-        setLoading(false);
-      }
-    };
+  /**
+   * Rechargement a chaque retour sur l'ecran, et non au seul montage.
+   *
+   * Expo Router garde les ecrans montes dans la pile : revenir ici apres
+   * avoir supprime une session ou quitte un groupe n'aurait rien rejoue, et
+   * la liste aurait continue d'afficher ce qui n'existe plus.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
 
-    load();
-  }, []);
+      const load = async () => {
+        try {
+          const [groupsRes, eventsRes] = await Promise.all([
+            api.get('/groups'),
+            api.get('/events'),
+          ]);
+          if (!alive) return;
+          setGroups(groupsRes.data);
+          setEvents(eventsRes.data);
+          setError(null);
+        } catch (err: any) {
+          if (alive) setError(err.response?.data?.message ?? 'Chargement impossible');
+        } finally {
+          if (alive) setLoading(false);
+        }
+      };
+
+      load();
+      return () => {
+        alive = false;
+      };
+    }, [])
+  );
 
   if (loading) return <Loading />;
 
