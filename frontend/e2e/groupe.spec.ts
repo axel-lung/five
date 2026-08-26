@@ -114,3 +114,46 @@ test('un simple membre ne voit aucune action d-administration', async ({ browser
 
   for (const ctx of [ownerCtx, memberCtx]) await ctx.close();
 });
+
+/**
+ * GET /groups renvoie les groupes publics en plus des siens, pour la
+ * decouverte. Le tableau de bord a longtemps affiche ce lot tel quel sous le
+ * titre "Mes groupes" : des groupes jamais rejoints y passaient pour siens, et
+ * l'etat vide — branche sur la taille du lot, pas sur l'appartenance — ne
+ * s'affichait plus des qu'un seul groupe public existait en base.
+ */
+test('le tableau de bord ignore les groupes publics non rejoints', async ({ browser }) => {
+  // Nom unique : la base est partagee par toute la suite, et un nom fixe se
+  // ferait avaler par la correspondance partielle de `getByText` des qu'un
+  // autre test laisse derriere lui un groupe au nom voisin.
+  const nom = `Les Publics ${Date.now()}`;
+
+  const ownerCtx = await browser.newContext();
+  const owner = await ownerCtx.newPage();
+  await register(owner, account('Sebastien'));
+  await createGroup(owner, nom);
+
+  await owner.getByRole('button', { name: 'Modifier le groupe' }).click();
+  await owner.selectOption('#groupAccess', 'public');
+  await owner.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(owner.getByText('Groupe mis à jour')).toBeVisible();
+
+  // Un inscrit du jour, membre de rien.
+  const guestCtx = await browser.newContext();
+  const guest = await guestCtx.newPage();
+  const errors = watchErrors(guest);
+  await register(guest, account('Nadia'));
+
+  await guest.goto('/dashboard');
+  await expect(guest.getByText("Vous n'êtes dans aucun groupe.")).toBeVisible();
+  await expect(guest.getByText(nom)).toHaveCount(0);
+
+  // Le groupe reste decouvrable, mais sous son propre titre.
+  await guest.goto('/groupes');
+  await expect(guest.getByRole('heading', { name: 'Groupes publics' })).toBeVisible();
+  await expect(guest.getByRole('heading', { name: 'Mes groupes' })).toHaveCount(0);
+  await expect(guest.getByText(nom)).toBeVisible();
+  await expectHealthy(guest, errors);
+
+  for (const ctx of [ownerCtx, guestCtx]) await ctx.close();
+});
