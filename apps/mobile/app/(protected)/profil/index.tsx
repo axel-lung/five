@@ -20,6 +20,7 @@ import {
   Select,
 } from 'five-ui';
 import Screen from '../../../components/Screen';
+import AvatarUpload from '../../../components/AvatarUpload';
 
 /** C-03 : creneaux proposes. Etiquettes libres cote API, liste fermee ici. */
 const SLOTS = [
@@ -141,14 +142,16 @@ export default function Profile() {
         </View>
       ) : null}
 
+      {/* C-02 : photo de profil. */}
       <Card className="mb-4">
-        <View className="flex-row items-center gap-4">
-          <Avatar uri={mediaSrc(profile.avatarUrl)} size={64} />
-          {/* TODO Phase 2 : AvatarUpload, via expo-image-picker. */}
-          <Text className="flex-1 text-sm text-gray-500">
-            Le changement de photo arrive avec la prochaine version.
-          </Text>
-        </View>
+        <AvatarUpload
+          endpoint="/users/avatar"
+          currentUrl={profile.avatarUrl}
+          onUploaded={(avatarUrl) => {
+            setProfile((p) => (p ? { ...p, avatarUrl } : p));
+            setNotice('Photo mise à jour.');
+          }}
+        />
       </Card>
 
       {/* C-05 : verification de l'adresse email. */}
@@ -198,11 +201,16 @@ export default function Profile() {
         </Field>
 
         <Field label="Ville">
-          <Input value={profile.city ?? ''} onChangeText={(value) => set({ city: value })} />
+          <Input
+            testID="profile-city"
+            value={profile.city ?? ''}
+            onChangeText={(value) => set({ city: value })}
+          />
         </Field>
 
         <Field label="Poste préféré">
           <Input
+            testID="profile-position"
             placeholder="Gardien, défenseur, attaquant…"
             value={profile.preferredPosition ?? ''}
             onChangeText={(value) => set({ preferredPosition: value })}
@@ -257,7 +265,7 @@ export default function Profile() {
           />
         </Field>
 
-        <Button onPress={save} disabled={saving} full>
+        <Button onPress={save} disabled={saving} testID="profile-save" full>
           {saving ? 'Enregistrement…' : 'Enregistrer'}
         </Button>
       </View>
