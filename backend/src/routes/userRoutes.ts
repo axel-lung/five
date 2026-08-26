@@ -4,9 +4,10 @@ import { deleteAccount, exportAccount, getPublicProfile } from '../controllers/a
 import { blockUser, unblockUser, listBlocks } from '../controllers/moderationController';
 import { uploadUserAvatar } from '../controllers/mediaController';
 import { uploadImage } from '../middleware/upload';
+import { registerPushToken, unregisterPushToken } from '../controllers/pushTokenController';
 import { validateRequest } from '../middleware/validateRequest';
 import { authenticateToken } from '../middleware/auth';
-import { updateProfileSchema } from '../utils/validationSchemas';
+import { updateProfileSchema, registerPushTokenSchema } from '../utils/validationSchemas';
 
 const router = Router();
 
@@ -21,6 +22,10 @@ router.put('/profile', validateRequest(updateProfileSchema), updateUserProfile);
 // ne concernent jamais qu'un compte, celui de l'appelant.
 router.get('/me/export', exportAccount);
 router.delete('/me', deleteAccount);
+
+// N-01 : appareils joignables par push. Avant '/:id', qui capturerait 'me'.
+router.post('/me/push-tokens', validateRequest(registerPushTokenSchema), registerPushToken);
+router.delete('/me/push-tokens/:token', unregisterPushToken);
 
 // D-06 : blocage. `/me/blocks` avant `/:id/block` n'a pas d'ambiguite ici,
 // les deux motifs ne se recouvrent pas.

@@ -59,8 +59,7 @@ const Item: React.FC<{ tab: Tab; active: boolean }> = ({ tab, active }) => (
 export const BottomNav: React.FC<{
   unread?: number;
   chatUnread?: number;
-  isAdmin?: boolean;
-}> = ({ unread = 0, chatUnread = 0, isAdmin = false }) => {
+}> = ({ unread = 0, chatUnread = 0 }) => {
   const pathname = usePathname();
   const inset = useNavBarInset();
 
@@ -71,9 +70,10 @@ export const BottomNav: React.FC<{
     { to: '/profil', label: 'Profil', icon: '👤' },
   ];
 
-  if (isAdmin) {
-    tabs.push({ to: '/admin', label: 'Admin', icon: '🛠' });
-  }
+  // Pas d'onglet Admin : le back-office est web (voir README). On
+  // n'administre pas une plateforme depuis un telephone, et un placeholder
+  // promettant un ecran « en phase 2 » laissait croire a un manque la ou
+  // c'est un choix.
 
   return (
     <View

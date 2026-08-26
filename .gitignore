@@ -57,3 +57,8 @@ Thumbs.db
 # Playwright
 frontend/test-results/
 frontend/playwright-report/
+
+# Export web de l'app mobile et sorties Playwright
+apps/mobile/dist/
+apps/mobile/test-results/
+apps/mobile/playwright-report/

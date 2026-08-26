@@ -10,6 +10,7 @@ import {
   Loading,
   PageTitle,
   Select,
+  parseLocalDateTime,
 } from 'five-ui';
 import Screen from '../../../components/Screen';
 
@@ -93,10 +94,19 @@ export default function CreateEvent() {
       return;
     }
 
+    // Sans cette garde, une saisie illisible faisait lever toISOString() et
+    // laissait l'ecran plante au lieu d'afficher une erreur.
+    const parsedDate = parseLocalDateTime(formData.dateTime);
+    if (!parsedDate) {
+      setError('Date invalide. Format attendu : 2026-08-27 19:30');
+      setLoading(false);
+      return;
+    }
+
     try {
       const payload: Record<string, unknown> = {
         title: formData.title.trim(),
-        dateTime: new Date(formData.dateTime).toISOString(),
+        dateTime: parsedDate.toISOString(),
         capacity: Number(formData.capacity),
       };
 
@@ -155,7 +165,6 @@ export default function CreateEvent() {
         </Field>
 
         <Field label="Date et heure">
-          {/* Using Input for datetime - in a real app, you might want a proper datetime picker */}
           <Input
             testID="create-event-datetime"
             value={formData.dateTime}

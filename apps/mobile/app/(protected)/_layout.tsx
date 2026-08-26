@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { AppState, Text, View } from 'react-native';
 import { Link, Redirect, Tabs, usePathname } from 'expo-router';
-import { api, createChatSocket, useHasSession, useProfile } from 'five-api-client';
+import { api, createChatSocket, useHasSession } from 'five-api-client';
 import { eventBus, Loading } from 'five-ui';
 import BugReportButton from '../../components/BugReportButton';
 import BottomNav from '../../components/BottomNav';
+import { usePushRegistration } from '../../components/usePushRegistration';
 import { shellMainClass } from '../../components/navShell';
 import { SHELL_BACKGROUND } from '../../components/theme';
 
@@ -22,10 +23,12 @@ import { SHELL_BACKGROUND } from '../../components/theme';
  */
 export default function ProtectedLayout() {
   const { checking, authenticated } = useHasSession();
-  const { profile } = useProfile();
   const [unread, setUnread] = useState(0);
   const [chatUnread, setChatUnread] = useState(0);
   const pathname = usePathname();
+
+  // N-01 : enregistre l'appareil et route le tap sur une notification.
+  usePushRegistration(authenticated);
 
   useEffect(() => {
     if (!authenticated) return undefined;
@@ -146,7 +149,7 @@ export default function ProtectedLayout() {
         <BugReportButton />
       </View>
 
-      <BottomNav unread={unread} chatUnread={chatUnread} isAdmin={profile?.role === 'admin'} />
+      <BottomNav unread={unread} chatUnread={chatUnread} />
     </View>
   );
 }

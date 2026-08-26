@@ -22,7 +22,8 @@
         {
           "photosPermission": "HighFive accède à vos photos pour les partager dans la discussion de votre groupe."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "ios": {
       "supportsTablet": true,

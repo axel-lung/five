@@ -192,3 +192,14 @@ export const listGroupMessagesSchema = Joi.object({
 export const markChatReadSchema = Joi.object({
   upTo: Joi.date().iso().optional(),
 });
+
+// N-01 : enregistrement d'un appareil pour les notifications push.
+export const registerPushTokenSchema = Joi.object({
+  // Le jeton Expo a la forme ExponentPushToken[...] ; on ne verifie que la
+  // longueur, sa syntaxe exacte appartenant a Expo et pouvant evoluer.
+  token: Joi.string().max(255).required(),
+  platform: Joi.string().valid('ios', 'android', 'web').required(),
+  // Identifiant IANA, ex. Europe/Paris. Facultatif : sans lui, les heures de
+  // silence retombent sur le fuseau du serveur.
+  timezone: Joi.string().max(64).optional(),
+});

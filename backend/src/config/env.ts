@@ -34,4 +34,9 @@ export const env = {
   minioSecretKey: process.env.MINIO_SECRET_KEY,
   minioUseSsl: process.env.MINIO_USE_SSL === 'true',
   mediaBucket: process.env.MEDIA_BUCKET ?? 'five-media',
+
+  // N-01 : le service Expo Push accepte les envois sans authentification.
+  // Un jeton d'acces est recommande en production, ou il empeche un tiers
+  // qui aurait capte un jeton d'appareil de vous usurper comme expediteur.
+  expoAccessToken: process.env.EXPO_ACCESS_TOKEN,
 };
