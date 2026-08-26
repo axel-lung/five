@@ -114,3 +114,112 @@ test('un simple membre ne voit aucune action d-administration', async ({ browser
 
   for (const ctx of [ownerCtx, memberCtx]) await ctx.close();
 });
+
+/**
+ * GET /groups renvoie les groupes publics en plus des siens, pour la
+ * decouverte. Le tableau de bord a longtemps affiche ce lot tel quel sous le
+ * titre "Mes groupes" : des groupes jamais rejoints y passaient pour siens, et
+ * l'etat vide — branche sur la taille du lot, pas sur l'appartenance — ne
+ * s'affichait plus des qu'un seul groupe public existait en base.
+ */
+test('le tableau de bord ignore les groupes publics non rejoints', async ({ browser }) => {
+  // Nom unique : la base est partagee par toute la suite, et un nom fixe se
+  // ferait avaler par la correspondance partielle de `getByText` des qu'un
+  // autre test laisse derriere lui un groupe au nom voisin.
+  const nom = `Les Publics ${Date.now()}`;
+
+  const ownerCtx = await browser.newContext();
+  const owner = await ownerCtx.newPage();
+  await register(owner, account('Sebastien'));
+  await createGroup(owner, nom);
+
+  await owner.getByRole('button', { name: 'Modifier le groupe' }).click();
+  await owner.selectOption('#groupAccess', 'public');
+  await owner.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(owner.getByText('Groupe mis à jour')).toBeVisible();
+
+  // Un inscrit du jour, membre de rien.
+  const guestCtx = await browser.newContext();
+  const guest = await guestCtx.newPage();
+  const errors = watchErrors(guest);
+  await register(guest, account('Nadia'));
+
+  await guest.goto('/dashboard');
+  await expect(guest.getByText("Vous n'êtes dans aucun groupe.")).toBeVisible();
+  await expect(guest.getByText(nom)).toHaveCount(0);
+
+  // Le groupe reste decouvrable, mais sous son propre titre.
+  await guest.goto('/groupes');
+  await expect(guest.getByRole('heading', { name: 'Groupes publics' })).toBeVisible();
+  await expect(guest.getByRole('heading', { name: 'Mes groupes' })).toHaveCount(0);
+  await expect(guest.getByText(nom)).toBeVisible();
+  await expectHealthy(guest, errors);
+
+  for (const ctx of [ownerCtx, guestCtx]) await ctx.close();
+});
+
+/**
+ * G-06 : un groupe public etait consultable mais pas rejoignable — ni bouton
+ * ni explication sur sa fiche. Le parcours complet, de la decouverte a
+ * l'appartenance, doit tenir sans lien d'invitation.
+ */
+test('rejoint un groupe public depuis sa fiche', async ({ browser }) => {
+  const nom = `Les Ouverts ${Date.now()}`;
+
+  const ownerCtx = await browser.newContext();
+  const owner = await ownerCtx.newPage();
+  await register(owner, account('Sebastien'));
+  await createGroup(owner, nom);
+
+  await owner.getByRole('button', { name: 'Modifier le groupe' }).click();
+  await owner.selectOption('#groupAccess', 'public');
+  await owner.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(owner.getByText('Groupe mis à jour')).toBeVisible();
+
+  const guestCtx = await browser.newContext();
+  const guest = await guestCtx.newPage();
+  const errors = watchErrors(guest);
+  await register(guest, account('Nadia'));
+
+  // On y arrive par la decouverte, pas par une URL devinee.
+  await guest.goto('/groupes');
+  await guest.getByText(nom).click();
+  await guest.waitForURL(/\/groupes\/[0-9a-f-]{36}/);
+
+  await guest.getByRole('button', { name: 'Rejoindre le groupe' }).click();
+  await expect(guest.getByText('Bienvenue dans le groupe.')).toBeVisible();
+
+  // Devenu membre, il accede aux actions reservees et peut repartir.
+  await expect(guest.getByRole('button', { name: 'Rejoindre le groupe' })).toHaveCount(0);
+  await expect(guest.getByRole('link', { name: 'Ouvrir la discussion' })).toBeVisible();
+  await expect(guest.getByRole('button', { name: 'Quitter le groupe' })).toBeVisible();
+
+  // Et le groupe bascule cote "Mes groupes", des deux ecrans.
+  await guest.goto('/dashboard');
+  await expect(guest.getByText(nom)).toBeVisible();
+  await expect(guest.getByText("Vous n'êtes dans aucun groupe.")).toHaveCount(0);
+
+  await guest.goto('/groupes');
+  await expect(guest.getByRole('heading', { name: 'Mes groupes' })).toBeVisible();
+  await expectHealthy(guest, errors);
+
+  for (const ctx of [ownerCtx, guestCtx]) await ctx.close();
+});
+
+/** Un groupe prive ne se rejoint pas : il reste introuvable pour un tiers. */
+test('un groupe prive n-offre aucun bouton rejoindre', async ({ browser }) => {
+  const ownerCtx = await browser.newContext();
+  const owner = await ownerCtx.newPage();
+  await register(owner, account('Sebastien'));
+  const url = await createGroup(owner, `Les Fermes ${Date.now()}`);
+
+  const guestCtx = await browser.newContext();
+  const guest = await guestCtx.newPage();
+  await register(guest, account('Nadia'));
+
+  await guest.goto(url);
+  await expect(guest.getByRole('button', { name: 'Rejoindre le groupe' })).toHaveCount(0);
+  await expect(guest.getByText(/introuvable|not found/i)).toBeVisible();
+
+  for (const ctx of [ownerCtx, guestCtx]) await ctx.close();
+});

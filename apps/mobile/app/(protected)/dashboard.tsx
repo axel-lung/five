@@ -50,6 +50,14 @@ export default function Dashboard() {
 
   if (loading) return <Loading />;
 
+  // GET /groups renvoie aussi les groupes publics dont on n'est pas membre,
+  // pour la decouverte : c'est l'onglet Groupes qui les affiche, sous leur
+  // propre titre. Ici la section s'appelle "Mes groupes" et ne doit donc
+  // montrer que l'appartenance reelle — etat vide compris, sans quoi
+  // l'invitation a creer son premier groupe disparait des qu'un groupe
+  // public existe.
+  const mine = groups.filter((group) => group.isMember);
+
   return (
     <Screen>
       <PageTitle subtitle="Vos groupes et vos prochaines sessions.">
@@ -113,7 +121,7 @@ export default function Dashboard() {
       <View>
         <Text className="text-xl font-bold text-gray-900 mb-3">Mes groupes</Text>
 
-        {groups.length === 0 ? (
+        {mine.length === 0 ? (
           <Card>
             <Text className="text-gray-600">
               Vous n'êtes dans aucun groupe.{' '}
@@ -125,19 +133,14 @@ export default function Dashboard() {
           </Card>
         ) : (
           <View className="gap-3">
-            {groups.map((group) => (
+            {mine.map((group) => (
               <LinkCard key={group.id} href={`/groupes/${group.id}`}>
-                <View className="flex-row items-center justify-between gap-3">
-                  <View className="flex-1">
-                    <Text numberOfLines={1} className="font-semibold text-gray-900">
-                      {group.name}
-                    </Text>
-                    {group.city ? (
-                      <Text className="text-sm text-gray-600">{group.city}</Text>
-                    ) : null}
-                  </View>
-                  {!group.isMember ? (
-                    <Text className="text-xs text-gray-500">Public</Text>
+                <View className="flex-1">
+                  <Text numberOfLines={1} className="font-semibold text-gray-900">
+                    {group.name}
+                  </Text>
+                  {group.city ? (
+                    <Text className="text-sm text-gray-600">{group.city}</Text>
                   ) : null}
                 </View>
               </LinkCard>

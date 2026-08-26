@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { UniqueConstraintError } from 'sequelize';
 import {
   GroupModel as Group,
   GroupMemberModel as GroupMember,
@@ -210,6 +211,65 @@ export const revokeInvitation = async (req: Request, res: Response, next: NextFu
     }
 
     res.json({ message: 'Invitation revoked' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * G-06 : rejoindre un groupe public de sa propre initiative.
+ *
+ * Distinct de addMember, qui reste l'ajout d'un tiers par un admin. Ici
+ * l'arrivant s'inscrit lui-meme, et seul un groupe public l'autorise : un
+ * groupe prive ne se rejoint que par invitation.
+ *
+ * Un groupe prive repond 404, pas 403 — meme regle que canViewGroup : son
+ * existence ne regarde pas les non-membres, et un 403 la confirmerait.
+ */
+export const joinGroup = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = req.params.id;
+    const userId = (req as any).user.id;
+
+    const group = await Group.findByPk(groupId);
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    // Idempotence avant visibilite : un membre d'un groupe redevenu prive
+    // doit lire "deja membre", pas "introuvable".
+    const existing = await GroupMember.findOne({ where: { groupId, userId } });
+    if (existing) {
+      return res.status(200).json({ message: 'Already a member of this group', groupId });
+    }
+
+    if (group.accessType !== 'public') {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    // D-06 : meme raison qu'a l'acceptation d'une invitation, le blocage
+    // s'applique a l'arrivee. Le proprietaire est ici l'interlocuteur, et la
+    // reponse ne distingue pas le blocage du groupe introuvable.
+    if (await isBlockedBetween(userId, group.ownerId)) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    try {
+      await GroupMember.create({ groupId, userId, role: 'member' });
+    } catch (err) {
+      // Deux clics simultanes : la contrainte d'unicite tranche, et le
+      // perdant est deja membre — ce n'est pas une erreur pour lui.
+      if (err instanceof UniqueConstraintError) {
+        return res.status(200).json({ message: 'Already a member of this group', groupId });
+      }
+      throw err;
+    }
+
+    // S-01 : comme a l'acceptation d'une invitation, le chat doit s'ouvrir
+    // sans attendre la revalidation periodique du WebSocket.
+    await refreshMembership(userId);
+
+    res.status(201).json({ message: 'Joined the group', groupId });
   } catch (error) {
     next(error);
   }

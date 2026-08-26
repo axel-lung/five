@@ -219,6 +219,93 @@ describe('Visibilite des groupes (G-06 / C-04)', () => {
   });
 });
 
+describe('Rejoindre un groupe public (G-06)', () => {
+  const join = (token: string, groupId: string) =>
+    api().post(`/api/groups/${groupId}/join`).set('Authorization', `Bearer ${token}`);
+
+  it('permet a un inconnu de rejoindre un groupe public', async () => {
+    const owner = await createUser();
+    const stranger = await createUser();
+    const group = await createGroup(owner.accessToken, { accessType: 'public' });
+
+    const res = await join(stranger.accessToken, group.id);
+    expect(res.status).toBe(201);
+
+    // L'appartenance doit etre reelle, pas seulement annoncee.
+    const list = await api()
+      .get('/api/groups')
+      .set('Authorization', `Bearer ${stranger.accessToken}`);
+    expect(list.body.find((g: any) => g.id === group.id).isMember).toBe(true);
+  });
+
+  // Un groupe prive ne se rejoint que par invitation. 404 et non 403 : un 403
+  // confirmerait son existence a qui n'a pas a la connaitre.
+  it('renvoie 404 sur un groupe prive, sans distinguer d-un groupe inexistant', async () => {
+    const owner = await createUser();
+    const stranger = await createUser();
+    const group = await createGroup(owner.accessToken, { accessType: 'private' });
+
+    const res = await join(stranger.accessToken, group.id);
+    expect(res.status).toBe(404);
+
+    const list = await api()
+      .get('/api/groups')
+      .set('Authorization', `Bearer ${stranger.accessToken}`);
+    expect(list.body.map((g: any) => g.id)).not.toContain(group.id);
+  });
+
+  it('est idempotent : rejoindre deux fois ne cree pas de doublon', async () => {
+    const owner = await createUser();
+    const stranger = await createUser();
+    const group = await createGroup(owner.accessToken, { accessType: 'public' });
+
+    expect((await join(stranger.accessToken, group.id)).status).toBe(201);
+    expect((await join(stranger.accessToken, group.id)).status).toBe(200);
+
+    const members = await api()
+      .get(`/api/groups/${group.id}/members`)
+      .set('Authorization', `Bearer ${owner.accessToken}`);
+    expect(members.body.filter((m: any) => m.userId === stranger.id)).toHaveLength(1);
+  });
+
+  it('rejoint en simple membre, sans droit d-administration', async () => {
+    const owner = await createUser();
+    const stranger = await createUser();
+    const group = await createGroup(owner.accessToken, { accessType: 'public' });
+
+    await join(stranger.accessToken, group.id);
+
+    const res = await api()
+      .put(`/api/groups/${group.id}`)
+      .set('Authorization', `Bearer ${stranger.accessToken}`)
+      .send({ name: 'Detourne', accessType: 'public' });
+    expect(res.status).toBe(403);
+  });
+
+  // D-06 : meme regle qu'a l'acceptation d'une invitation, le blocage vaut a
+  // l'arrivee, et la reponse ne le distingue pas d'un groupe introuvable.
+  it('refuse l-arrivee entre comptes bloques', async () => {
+    const owner = await createUser();
+    const stranger = await createUser();
+    const group = await createGroup(owner.accessToken, { accessType: 'public' });
+
+    await api()
+      .post(`/api/users/${stranger.id}/block`)
+      .set('Authorization', `Bearer ${owner.accessToken}`);
+
+    const res = await join(stranger.accessToken, group.id);
+    expect(res.status).toBe(404);
+  });
+
+  it('exige une authentification', async () => {
+    const owner = await createUser();
+    const group = await createGroup(owner.accessToken, { accessType: 'public' });
+
+    const res = await api().post(`/api/groups/${group.id}/join`);
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('Quitter un groupe (G-04)', () => {
   it('permet a un membre de partir', async () => {
     const owner = await createUser();

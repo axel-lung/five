@@ -15,6 +15,7 @@ import {
   acceptInvitation,
   listInvitations,
   revokeInvitation,
+  joinGroup,
   leaveGroup,
   updateMemberRole,
   transferOwnership
@@ -72,6 +73,9 @@ router.delete('/:id', deleteGroup);
 router.post('/:id/members', addMember);
 router.delete('/:id/members', removeMember);
 router.get('/:id/members', getGroupMembers);
+// G-06 : auto-inscription a un groupe public. Distinct de POST /:id/members,
+// qui reste l'ajout d'un tiers par un admin.
+router.post('/:id/join', joinGroup);
 router.post('/:id/leave', leaveGroup);
 
 // G-01 : avatar du groupe.

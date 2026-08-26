@@ -139,6 +139,14 @@ const GroupDetail: React.FC = () => {
       await loadMembers();
     }, 'Membre retiré.');
 
+  const join = () =>
+    run(async () => {
+      await api.post(`/groups/${groupId}/join`);
+      // Recharger les deux : `myRole` se deduit de la liste des membres, et
+      // c'est lui qui debloque les actions reservees aux membres.
+      await Promise.all([loadGroup(), loadMembers()]);
+    }, 'Bienvenue dans le groupe.');
+
   const leave = () =>
     run(async () => {
       if (!window.confirm('Quitter ce groupe ?')) return;
@@ -194,6 +202,20 @@ const GroupDetail: React.FC = () => {
         <div className="mb-4">
           <Alert kind="error">{error}</Alert>
         </div>
+      )}
+
+      {/* G-06 : sans ce bloc, un groupe public etait un cul-de-sac — on
+          pouvait le consulter, jamais le rejoindre. */}
+      {!myRole && group.accessType === 'public' && (
+        <Card className="mb-6">
+          <p className="text-gray-700 mb-3">
+            Ce groupe est public : vous pouvez le rejoindre pour voir ses sessions et
+            participer à la discussion.
+          </p>
+          <Button type="button" onClick={join} disabled={busy} full>
+            Rejoindre le groupe
+          </Button>
+        </Card>
       )}
 
       {myRole && (

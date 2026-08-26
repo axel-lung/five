@@ -31,6 +31,14 @@ const Dashboard: React.FC = () => {
 
   if (loading) return <Loading />;
 
+  // GET /groups renvoie aussi les groupes publics dont on n'est pas membre,
+  // pour la decouverte : c'est la page Groupes qui les affiche, sous leur
+  // propre titre. Ici la section s'appelle "Mes groupes" et ne doit donc
+  // montrer que l'appartenance reelle — etat vide compris, sans quoi
+  // l'invitation a creer son premier groupe disparait des qu'un groupe
+  // public existe.
+  const mine = groups.filter((group) => group.isMember);
+
   return (
     <div>
       <PageTitle subtitle="Vos groupes et vos prochaines sessions.">
@@ -94,7 +102,7 @@ const Dashboard: React.FC = () => {
 
       <section>
         <h2 className="text-xl font-bold mb-3">Mes groupes</h2>
-        {groups.length === 0 ? (
+        {mine.length === 0 ? (
           <Card>
             <p className="text-gray-600">
               Vous n'êtes dans aucun groupe.{' '}
@@ -106,17 +114,12 @@ const Dashboard: React.FC = () => {
           </Card>
         ) : (
           <div className="space-y-3">
-            {groups.map((group) => (
+            {mine.map((group) => (
               <Link key={group.id} to={`/groupes/${group.id}`} className="block">
                 <Card className="hover:border-green-400 transition">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">{group.name}</h3>
-                      {group.city && <p className="text-sm text-gray-600">{group.city}</p>}
-                    </div>
-                    {!group.isMember && (
-                      <span className="text-xs text-gray-500 shrink-0">Public</span>
-                    )}
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-gray-900 truncate">{group.name}</h3>
+                    {group.city && <p className="text-sm text-gray-600">{group.city}</p>}
                   </div>
                 </Card>
               </Link>
