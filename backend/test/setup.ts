@@ -1,6 +1,7 @@
 import { sequelize } from '../src/models';
 
 const TABLES = [
+  'push_tokens',
   'audit_logs',
   'event_reminders',
   'notification_preferences',

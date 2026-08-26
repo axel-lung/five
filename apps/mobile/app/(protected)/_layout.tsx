@@ -5,6 +5,7 @@ import { api, createChatSocket, useHasSession, useProfile } from 'five-api-clien
 import { eventBus, Loading } from 'five-ui';
 import BugReportButton from '../../components/BugReportButton';
 import BottomNav from '../../components/BottomNav';
+import { usePushRegistration } from '../../components/usePushRegistration';
 import { shellMainClass } from '../../components/navShell';
 import { SHELL_BACKGROUND } from '../../components/theme';
 
@@ -26,6 +27,9 @@ export default function ProtectedLayout() {
   const [unread, setUnread] = useState(0);
   const [chatUnread, setChatUnread] = useState(0);
   const pathname = usePathname();
+
+  // N-01 : enregistre l'appareil et route le tap sur une notification.
+  usePushRegistration(authenticated);
 
   useEffect(() => {
     if (!authenticated) return undefined;

@@ -6,6 +6,7 @@ import {
   GroupMemberModel as GroupMember,
   EventModel as Event,
   EventInscriptionModel as EventInscription,
+  PushTokenModel as PushToken,
   sequelize,
 } from '../models';
 import { cancelInscription } from '../services/inscriptions';
@@ -139,7 +140,13 @@ export const deleteAccount = async (req: Request, res: Response, next: NextFunct
       // 4. Sortie de tous les groupes.
       await GroupMember.destroy({ where: { userId }, transaction: t });
 
-      // 5. Anonymisation. L'email garde une forme unique pour ne pas violer la
+      // 5. Appareils joignables par push. L'effacement etant une
+      // anonymisation et non un DELETE, le ON DELETE CASCADE ne se declenche
+      // pas : sans cette ligne, le telephone continuerait de recevoir les
+      // notifications d'un compte qui n'existe plus.
+      await PushToken.destroy({ where: { userId }, transaction: t });
+
+      // 6. Anonymisation. L'email garde une forme unique pour ne pas violer la
       // contrainte, et le domaine .invalid est reserve (RFC 2606) : il ne peut
       // etre livre nulle part.
       await user.update(

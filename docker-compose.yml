@@ -62,6 +62,7 @@ services:
       - MINIO_SECRET_KEY=minioadmin_${MINIO_PASSWORD:-changeme}
       - MINIO_USE_SSL=false
       - MEDIA_BUCKET=five-media
+      - EXPO_ACCESS_TOKEN=${EXPO_ACCESS_TOKEN:-}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET doit être defini dans .env}
       - NODE_ENV=production
       - PORT=6010

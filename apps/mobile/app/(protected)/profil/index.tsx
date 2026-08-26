@@ -21,6 +21,7 @@ import {
 } from 'five-ui';
 import Screen from '../../../components/Screen';
 import AvatarUpload from '../../../components/AvatarUpload';
+import { unregisterCurrentDevice } from '../../../components/usePushRegistration';
 
 /** C-03 : creneaux proposes. Etiquettes libres cote API, liste fermee ici. */
 const SLOTS = [
@@ -107,6 +108,11 @@ export default function Profile() {
   };
 
   const logout = async () => {
+    // N-01 : avant d'effacer la session, sans quoi la requete partirait sans
+    // jeton d'acces — et ce telephone continuerait de recevoir les
+    // notifications du compte qui vient de partir.
+    await unregisterCurrentDevice();
+
     // Attendu : le coffre natif est asynchrone, et le garde de session lit le
     // jeton des le rendu suivant. Sans ca, il peut encore le trouver et
     // renvoyer vers la zone protegee.

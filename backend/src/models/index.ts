@@ -16,6 +16,7 @@ import { NotificationPreference } from './notificationPreference';
 import { EventReminder } from './eventReminder';
 import { AuditLog } from './auditLog';
 import { Venue } from './venue';
+import { PushToken } from './pushToken';
 
 // Initialize Sequelize connection
 export const sequelize = new Sequelize(env.databaseUrl, {
@@ -45,6 +46,7 @@ export const NotificationPreferenceModel = NotificationPreference.initModel(sequ
 export const EventReminderModel = EventReminder.initModel(sequelize);
 export const AuditLogModel = AuditLog.initModel(sequelize);
 export const VenueModel = Venue.initModel(sequelize);
+export const PushTokenModel = PushToken.initModel(sequelize);
 
 // Set up associations
 User.associate = ({ Group, Event, EventInscription, GroupMember }) => {
@@ -128,5 +130,6 @@ NotificationPreference.associate({ UserModel });
 EventReminder.associate({ EventModel, UserModel });
 AuditLog.associate({ UserModel });
 Venue.associate({ EventModel });
+PushToken.associate({ UserModel });
 
 export { sequelize as default };
