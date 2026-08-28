@@ -30,11 +30,23 @@
       "bundleIdentifier": "fr.alng.five"
     },
     "android": {
-      "package": "fr.alng.five"
+      "package": "fr.alng.five",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
       "output": "single"
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "82d188f3-48ea-46fa-82a4-72c59e948faf"
+      }
+    },
+    "owner": "tacteek"
   }
 }
