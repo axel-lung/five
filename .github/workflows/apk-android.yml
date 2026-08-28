@@ -22,9 +22,13 @@ on:
           - arm64-v8a,armeabi-v7a
           - armeabi-v7a,arm64-v8a,x86,x86_64
       new_architecture:
-        description: "New Architecture (decocher pour comparer si l'affichage se fige)"
+        description: "New Architecture (laisser decoche : l'activer fige l'affichage Android)"
         type: boolean
-        default: true
+        # Doit rester false : c'est aussi ce que dit app.json, et -PnewArchEnabled
+        # ci-dessous surcharge cette valeur-la. Un defaut a true produisait un APK
+        # qui se fige sans la moindre trace d'erreur. L'input reste modifiable pour
+        # comparer deux builds sur cette seule variable.
+        default: false
 
 jobs:
   build:

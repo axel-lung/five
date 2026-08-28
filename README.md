@@ -94,20 +94,48 @@ cd backend && npm run make-admin -- alice@example.com
 
 ## Notifications push (N-01)
 
-Le service Expo Push est gratuit et n'exige pas de cle. Pour qu'une
-notification atteigne reellement un telephone, il faut en revanche :
+Le service Expo Push est gratuit et n'exige pas de cle. Il n'est qu'un relais :
+sur Android il remet le message a FCM, sur iOS a APNs. Rien n'y est stocke,
+Postgres reste la source de verite.
 
-1. un identifiant de projet EAS — `eas init` avec un compte Expo gratuit,
-   qui renseigne `extra.eas.projectId` dans `apps/mobile/app.json` ;
-2. un **appareil physique** : ni emulateur, ni simulateur ;
-3. sur Android, un **development build** (`npx expo run:android`), Expo Go
-   ne supportant plus les notifications distantes ;
-4. pour iOS, un compte Apple Developer payant, necessaire aux identifiants
-   APNs — et de toute facon a toute installation sur iPhone.
+Le relais ne suffit pas a lui seul. Sur Android, il faut **en plus** une
+configuration Firebase, en deux moities qu'on oublie facilement de distinguer :
 
-Sans ces elements l'application fonctionne normalement, sans push, et le
-signale dans ses journaux. `EXPO_ACCESS_TOKEN` est facultatif : il empeche un
-tiers ayant capte un jeton d'appareil de vous usurper comme expediteur.
+1. **Dans l'application** — une app Android dans un projet Firebase, avec le
+   nom de package exact `fr.alng.five`. Le `google-services.json` telecharge se
+   place dans `apps/mobile/` et **se commite** : il ne contient pas de secret,
+   et `actions/checkout` ne recuperant que les fichiers suivis, le build
+   echouerait sans lui. Il est declare par `android.googleServicesFile` dans
+   `apps/mobile/app.json`.
+2. **Chez Expo** — la cle de compte de service FCM V1 (Firebase → Parametres du
+   projet → Comptes de service), televersee via `npx eas-cli credentials` →
+   Android → Push Notifications. C'est elle qui autorise le relais a livrer vers
+   votre application. **Cette cle-la ne se commite jamais** (voir `.gitignore`).
+
+Sans la premiere, `FirebaseMessaging.getInstance()` echoue et aucun jeton n'est
+emis. Sans la seconde, le jeton est emis mais l'envoi echoue en
+`MismatchSenderId`. Les deux echecs sont **silencieux** cote application : le
+`catch` de `usePushRegistration.ts` se contente d'un `console.warn`, et l'API
+d'Expo repond `200` avec l'erreur dans le corps, que `services/push.ts` ne lit
+pas. Le diagnostic passe donc par la table `push_tokens` et par un appel `curl`
+direct a `https://exp.host/--/api/v2/push/send`.
+
+Restent deux contraintes qui ne se contournent pas :
+
+- un **appareil physique** — ni emulateur, ni simulateur ;
+- pour iOS, un **compte Apple Developer payant**, necessaire aux identifiants
+  APNs comme a toute installation sur iPhone.
+
+Pour obtenir un APK installable, utiliser le workflow **« APK Android (test) »**
+(`.github/workflows/apk-android.yml`, declenchement manuel) : il fait le
+`expo prebuild` et le build Gradle sur le runner, sans SDK Android ni JDK en
+local, et sans compte EAS. Laisser `new_architecture` decoche.
+
+`EXPO_ACCESS_TOKEN` est facultatif : il empeche un tiers ayant capte un jeton
+d'appareil de vous usurper comme expediteur.
+
+Le web (`five.alng.fr`) n'a **pas** de push : le centre de notifications in-app
+y fonctionne, mais aucun transport n'y est branche.
 
 ## API Endpoints
 

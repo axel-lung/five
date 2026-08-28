@@ -79,11 +79,22 @@ fourth copy. Two conventions worth knowing:
 **Data fetching**: no React Query, no SWR, no Redux, no Zustand. Match the
 surrounding pattern rather than introducing one.
 
+**Push notifications** are wired (N-01). `services/push.ts` sends through the
+Expo Push relay behind a `Push` interface — nothing in the controllers knows
+Expo, and the implementation is silent under `NODE_ENV=test`. Sending happens
+in `transaction.afterCommit` and is never awaited: a lost push must not fail
+the business action, and the `notifications` row is already written. Quiet
+hours suppress the push, never the notification. Android delivery additionally
+needs a Firebase setup that lives **outside the repo** — `google-services.json`
+in `apps/mobile/` (committed) plus an FCM V1 service-account key uploaded to
+Expo (never committed); see the README. The web client has no push transport,
+only the in-app notification centre.
+
 **Not wired yet.** These appear in `CCH.md` as product intent and have **no
 implementation** — do not assume they exist:
-Stripe Connect, RevenueCat, Resend (`services/mailer.ts` is a console stub),
-Sentry, PostHog, Expo push notifications (the `notifications` table is
-persisted and read in-app only), and Google Maps/Places.
+Stripe Connect, RevenueCat, Resend (`services/mailer.ts` is a console stub, and
+`notification_preferences.emailEnabled` is stored but read nowhere), Sentry,
+PostHog, and Google Maps/Places.
 
 **Key architectural decisions**:
 - Business-critical logic (confirmation, spot release, and later refunds) lives

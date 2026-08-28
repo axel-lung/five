@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "485838474009",
+    "project_id": "highfive-tacteek",
+    "storage_bucket": "highfive-tacteek.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:485838474009:android:1ce499ed3f6bb8f7501388",
+        "android_client_info": {
+          "package_name": "fr.alng.five"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQJrripvkd0EfGNsA-HNSunvN3B2OCQpg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

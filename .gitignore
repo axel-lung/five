@@ -62,3 +62,13 @@ frontend/playwright-report/
 apps/mobile/dist/
 apps/mobile/test-results/
 apps/mobile/playwright-report/
+
+# Cle de compte de service Firebase (FCM) : elle autorise l'envoi de push vers
+# l'application, et ne doit JAMAIS etre commitee. Elle ne vit qu'en local, le
+# temps d'etre televersee chez Expo (`eas credentials`).
+#
+# Attention a ne pas ignorer google-services.json avec : celui-la DOIT etre
+# versionne. Il ne contient pas de secret, et `actions/checkout` ne recuperant
+# que les fichiers suivis, `expo prebuild` echouerait sans lui.
+*-firebase-adminsdk-*.json
+firebase-service-account*.json
